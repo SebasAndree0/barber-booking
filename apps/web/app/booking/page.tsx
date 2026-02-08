@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import BookingForm from "../components/BookingForm";
 
@@ -15,7 +15,7 @@ function todayYYYYMMDD() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export default function BookingPage() {
+function BookingInner() {
   const searchParams = useSearchParams();
   const preselectedServiceId = searchParams.get("service_id") || "";
 
@@ -111,5 +111,13 @@ export default function BookingPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <Suspense fallback={<div className="text-white/70">Cargando…</div>}>
+      <BookingInner />
+    </Suspense>
   );
 }

@@ -20,26 +20,25 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # ✅ IMPORTANTE: settings debe CREARSE en upgrade (no borrarse)
-    op.create_table(
-        "settings",
-        sa.Column("id", sa.VARCHAR(length=20), nullable=False),
-        sa.Column("address", sa.VARCHAR(length=255), nullable=False),
-        sa.Column("whatsapp", sa.VARCHAR(length=50), nullable=False),
-        sa.Column("instagram_url", sa.VARCHAR(length=255), nullable=False),
-        sa.Column("tiktok_url", sa.VARCHAR(length=255), nullable=False),
-        sa.Column("hours_week", sa.VARCHAR(length=80), nullable=False),
-        sa.Column("hours_sat", sa.VARCHAR(length=80), nullable=False),
-        sa.Column("hours_sun", sa.VARCHAR(length=80), nullable=False),
-        sa.Column("google_maps_embed_url", sa.TEXT(), nullable=False),
-        sa.Column("featured_rating", sa.DOUBLE_PRECISION(precision=53), nullable=True),
-        sa.Column("featured_reviews_count", sa.INTEGER(), nullable=True),
-        sa.Column(
-            "featured_reviews",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=True,
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("settings_pkey")),
+
+    # ✅ SAFE: si settings ya existe (por migraciones previas), no falla
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            id VARCHAR(20) PRIMARY KEY,
+            address VARCHAR(255) NOT NULL,
+            whatsapp VARCHAR(50) NOT NULL,
+            instagram_url VARCHAR(255) NOT NULL,
+            tiktok_url VARCHAR(255) NOT NULL,
+            hours_week VARCHAR(80) NOT NULL,
+            hours_sat VARCHAR(80) NOT NULL,
+            hours_sun VARCHAR(80) NOT NULL,
+            google_maps_embed_url TEXT NOT NULL,
+            featured_rating DOUBLE PRECISION,
+            featured_reviews_count INTEGER,
+            featured_reviews JSONB
+        );
+        """
     )
 
     # índices / alter columns que ya tenías
@@ -93,5 +92,5 @@ def downgrade() -> None:
 
     op.drop_index(op.f("ix_barbers_active"), table_name="barbers")
 
-    # ✅ En downgrade se BORRA settings (no se crea)
-    op.drop_table("settings")
+    # ✅ SAFE
+    op.execute("DROP TABLE IF EXISTS settings;")

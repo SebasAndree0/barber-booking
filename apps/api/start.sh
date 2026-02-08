@@ -3,11 +3,11 @@ set -e
 
 PORT="${PORT:-8000}"
 
-# Check rápido de dependencias (falla con error claro si falta)
 python -c "import email_validator; print('email_validator OK')"
 
-# Crea/actualiza tablas en la DB de Render
 alembic upgrade head
 
-# Levanta la API
+# ✅ Seed (no duplica porque tu seed revisa count())
+python -m app.db.seed_runner
+
 exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

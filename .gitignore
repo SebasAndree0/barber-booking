@@ -1,0 +1,11 @@
+# Env files (NO subir)
+.env
+.env.*
+!.env.example
+.env.local
+node_modules/
+.next/
+dist/
+__pycache__/
+*.pyc
+.venv/

@@ -14,6 +14,8 @@ app = FastAPI(title="OsoBarber Booking API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://osobarber.cl",
+        "https://www.osobarber.cl",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],

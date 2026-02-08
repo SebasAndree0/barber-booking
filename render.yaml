@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: oso-barber-api
+    env: python
+    rootDir: apps/api
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash start.sh

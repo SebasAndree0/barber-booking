@@ -2,7 +2,7 @@
 
 Revision ID: 537868564f36
 Revises: 4959e7c3b4d2
-Create Date: 2026-02-07 15:10:14.812127
+Create Date: 2026-02-XX
 """
 from typing import Sequence, Union
 
@@ -18,16 +18,23 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # ✅ NUEVO: reseñas manuales
-    op.add_column("settings", sa.Column("featured_rating", sa.Float(), nullable=True))
-    op.add_column("settings", sa.Column("featured_reviews_count", sa.Integer(), nullable=True))
-    op.add_column(
-        "settings",
-        sa.Column("featured_reviews", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    # ✅ Si settings no existe, créala (mínimo) para no reventar el deploy
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            id VARCHAR(20) PRIMARY KEY
+        );
+        """
     )
+
+    # ✅ Asegura columnas (si ya existen, no falla)
+    op.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS featured_rating FLOAT;")
+    op.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS featured_reviews_count INTEGER;")
+    op.execute("ALTER TABLE settings ADD COLUMN IF NOT EXISTS featured_reviews JSONB;")
 
 
 def downgrade() -> None:
-    op.drop_column("settings", "featured_reviews")
-    op.drop_column("settings", "featured_reviews_count")
-    op.drop_column("settings", "featured_rating")
+    # No es crítico en Render, pero lo dejamos ordenado
+    op.execute("ALTER TABLE settings DROP COLUMN IF EXISTS featured_reviews;")
+    op.execute("ALTER TABLE settings DROP COLUMN IF EXISTS featured_reviews_count;")
+    op.execute("ALTER TABLE settings DROP COLUMN IF EXISTS featured_rating;")

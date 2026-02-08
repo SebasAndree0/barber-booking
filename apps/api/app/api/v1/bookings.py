@@ -9,18 +9,30 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, not_
 
+from zoneinfo import ZoneInfo
+
 from app.db.deps import get_db
 from app.models.booking import Booking
 from app.models.service import Service
 from app.schemas.booking import BookingCreate
-from app.core.mailer import send_email  # ✅ IMPORTANTE
+from app.core.mailer import send_email  # ✅ si no lo usas, bórralo
 
 router = APIRouter()
+
+CL_TZ = ZoneInfo("America/Santiago")
+UTC = timezone.utc
 
 
 def _overlaps(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime) -> bool:
     """True si [a_start, a_end) se cruza con [b_start, b_end)."""
     return not (a_end <= b_start or a_start >= b_end)
+
+
+def _to_utc(dt: datetime) -> datetime:
+    """Convierte datetime a UTC. Si viene naive, asume Chile."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=CL_TZ)
+    return dt.astimezone(UTC)
 
 
 @router.post("/bookings")
@@ -37,7 +49,7 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
 
     # ✅ Validación: debe venir WhatsApp o Email (uno de los dos)
     phone = (payload.client_phone or "").strip()
-    email = (str(payload.client_email).strip() if getattr(payload, "client_email", None) else "")
+    email = (str(getattr(payload, "client_email", "") or "")).strip()
 
     if not phone and not email:
         raise HTTPException(status_code=400, detail="Ingresa WhatsApp o correo (uno de los dos).")
@@ -53,11 +65,7 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
     if not service:
         raise HTTPException(status_code=404, detail="Servicio no existe")
 
-    start = payload.start_time
-    # Si start viene sin tz, lo consideramos UTC para mantener consistencia
-    if start.tzinfo is None:
-        start = start.replace(tzinfo=timezone.utc)
-
+    start = _to_utc(payload.start_time)
     end = start + timedelta(minutes=service.duration_minutes)
 
     conflict = (
@@ -81,8 +89,8 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
         barber_id=barber_uuid,
         service_id=service_uuid,
         client_name=payload.client_name,
-        client_phone=phone or None,   # ✅ puede ser null
-        client_email=email or None,   # ✅ puede ser null
+        client_phone=phone or None,
+        client_email=email or None,
         start_time=start,
         end_time=end,
     )
@@ -100,14 +108,13 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
             f"Gracias por agendar con OsoBarber. Tu reserva quedó confirmada ✅\n\n"
             f"• Servicio: {service.name}\n"
             f"• Día: {booking.start_time.date()}\n"
-            f"• Hora: {booking.start_time.strftime('%H:%M')}\n\n"
+            f"• Hora: {booking.start_time.astimezone(CL_TZ).strftime('%H:%M')} (Chile)\n\n"
             f"Si necesitas cambiar la hora, escríbenos:\n"
             f"📧 {BUSINESS_EMAIL}\n"
             f"📱 {BUSINESS_WA}\n\n"
             f"OsoBarber • San Bernardo"
         )
 
-        # ✅ Si falla el mail, NO rompemos la reserva, pero lo mostramos en consola
         try:
             send_email(booking.client_email, subject, text)
             print("✅ Email enviado a:", booking.client_email)
@@ -116,6 +123,8 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
 
     return {
         "id": str(booking.id),
+        "barber_id": str(booking.barber_id),
+        "service_id": str(booking.service_id),
         "start_time": booking.start_time,
         "end_time": booking.end_time,
     }
@@ -124,13 +133,16 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
 @router.get("/bookings")
 def list_bookings(
     barber_id: UUID = Query(..., description="UUID del barbero"),
-    day: date = Query(..., description="YYYY-MM-DD"),
+    day: date = Query(..., description="YYYY-MM-DD (día en Chile)"),
     db: Session = Depends(get_db),
 ):
-    """Lista reservas de un barbero para un día (UTC)."""
+    """Lista reservas de un barbero para un día (interpretado como día Chile, convertido a UTC)."""
 
-    day_start = datetime.combine(day, time(0, 0, 0), tzinfo=timezone.utc)
-    day_end = day_start + timedelta(days=1)
+    day_start_cl = datetime.combine(day, time(0, 0, 0), tzinfo=CL_TZ)
+    day_end_cl = day_start_cl + timedelta(days=1)
+
+    day_start = day_start_cl.astimezone(UTC)
+    day_end = day_end_cl.astimezone(UTC)
 
     rows = (
         db.query(Booking)
@@ -162,10 +174,10 @@ def list_bookings(
 def list_slots(
     barber_id: UUID = Query(..., description="UUID del barbero"),
     service_id: UUID = Query(..., description="UUID del servicio"),
-    day: date = Query(..., description="YYYY-MM-DD"),
+    day: date = Query(..., description="YYYY-MM-DD (día Chile)"),
     db: Session = Depends(get_db),
 ):
-    """Devuelve slots disponibles para un barbero + servicio en un día."""
+    """Devuelve slots disponibles para un barbero + servicio en un día (día Chile)."""
 
     service = db.query(Service).filter(Service.id == service_id).first()
     if not service:
@@ -173,12 +185,15 @@ def list_slots(
 
     duration = timedelta(minutes=service.duration_minutes)
 
-    WORK_START = time(10, 0)  # 10:00
-    WORK_END = time(20, 0)    # 20:00
+    WORK_START = time(10, 0)  # 10:00 Chile
+    WORK_END = time(20, 0)    # 20:00 Chile
     STEP = timedelta(minutes=30)
 
-    start_day = datetime.combine(day, WORK_START, tzinfo=timezone.utc)
-    end_day = datetime.combine(day, WORK_END, tzinfo=timezone.utc)
+    start_day_cl = datetime.combine(day, WORK_START, tzinfo=CL_TZ)
+    end_day_cl = datetime.combine(day, WORK_END, tzinfo=CL_TZ)
+
+    start_day = start_day_cl.astimezone(UTC)
+    end_day = end_day_cl.astimezone(UTC)
 
     existing = (
         db.query(Booking)
@@ -200,7 +215,13 @@ def list_slots(
         conflict = any(_overlaps(slot_start, slot_end, b.start_time, b.end_time) for b in existing)
 
         if not conflict:
-            slots.append({"start_time": slot_start.isoformat(), "end_time": slot_end.isoformat()})
+            # devolvemos en hora Chile para el front
+            slots.append(
+                {
+                    "start_time": slot_start.astimezone(CL_TZ).isoformat(),
+                    "end_time": slot_end.astimezone(CL_TZ).isoformat(),
+                }
+            )
 
         cursor += STEP
 

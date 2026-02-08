@@ -11,8 +11,8 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.core.config import settings
-from app.db.metadata import metadata as target_metadata
-
+from app.db.base import Base
+import app.models  # IMPORTANT: carga Barber/Service/Booking y registra metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -25,6 +25,9 @@ config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# ✅ metadata real de SQLAlchemy (ya con modelos cargados)
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

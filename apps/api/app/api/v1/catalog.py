@@ -14,6 +14,10 @@ from app.schemas.setting import SettingOut, SettingUpdate
 router = APIRouter()
 
 
+# -------------------------
+# PUBLIC CATALOG
+# -------------------------
+
 @router.get("/barbers")
 def list_barbers(db: Session = Depends(get_db)):
     rows = (
@@ -34,6 +38,32 @@ def list_services(db: Session = Depends(get_db)):
         .all()
     )
 
+
+@router.get("/catalog")
+def get_catalog(db: Session = Depends(get_db)):
+    """Devuelve barberos y servicios en una sola llamada (ideal para el front)."""
+    barbers = (
+        db.query(Barber)
+        .filter(Barber.active == True)  # noqa: E712
+        .order_by(Barber.name.asc())
+        .all()
+    )
+    services = (
+        db.query(Service)
+        .filter(Service.active == True)  # noqa: E712
+        .order_by(Service.duration_minutes.asc(), Service.name.asc())
+        .all()
+    )
+
+    return {
+        "barbers": [{"id": str(b.id), "name": b.name} for b in barbers],
+        "services": services,
+    }
+
+
+# -------------------------
+# SERVICES (admin)
+# -------------------------
 
 @router.patch("/services/{service_id}", response_model=ServiceOut)
 def update_service(

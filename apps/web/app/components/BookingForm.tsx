@@ -5,6 +5,8 @@ import React, { useEffect, useMemo, useState } from "react";
 type Barber = { id: string; name: string };
 type Service = { id: string; name: string; duration_minutes: number };
 
+type Slot = { start_time: string; end_time: string; available: boolean };
+
 type Props = {
   barbers: Barber[];
   services: Service[];
@@ -58,7 +60,7 @@ export default function BookingForm({
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
 
-  const [slots, setSlots] = useState<string[]>([]);
+  const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string>("");
 
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -68,9 +70,6 @@ export default function BookingForm({
   const [slotsError, setSlotsError] = useState<string | null>(null);
 
   const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
-
-  // ✅ Duración fija (1 hora) para TODO (solo para calcular disponibilidad)
-  const serviceMinutes = 60;
 
   // Contacto OsoBarber (se muestra al cliente)
   const BUSINESS_EMAIL = "osobarberr@gmail.com";
@@ -102,12 +101,14 @@ export default function BookingForm({
     return barbers.find((b) => b.id === selectedBarberId) || null;
   }, [barbers, selectedBarberId]);
 
-  // load availability slots
+  const availableCount = useMemo(() => slots.filter((s) => s.available).length, [slots]);
+
+  // load slots (available + unavailable)
   useEffect(() => {
     let alive = true;
 
     async function run() {
-      if (!selectedBarberId || !day) {
+      if (!selectedBarberId || !day || !serviceId) {
         if (alive) setSlots([]);
         return;
       }
@@ -117,16 +118,16 @@ export default function BookingForm({
 
       try {
         const url = apiUrl(
-          `/availability?barber_id=${encodeURIComponent(selectedBarberId)}&day=${encodeURIComponent(
-            day
-          )}&service_minutes=${encodeURIComponent(String(serviceMinutes))}`
+          `/slots?barber_id=${encodeURIComponent(selectedBarberId)}&service_id=${encodeURIComponent(
+            serviceId
+          )}&day=${encodeURIComponent(day)}&include_unavailable=true`
         );
 
         const r = await fetch(url, { cache: "no-store" });
         const j = await r.json().catch(() => null);
         if (!r.ok) throw new Error(j?.detail || `Error ${r.status}`);
 
-        const list = Array.isArray(j?.slots) ? (j.slots as string[]) : [];
+        const list = Array.isArray(j) ? (j as Slot[]) : [];
         if (!alive) return;
         setSlots(list);
       } catch (e: any) {
@@ -143,7 +144,7 @@ export default function BookingForm({
     return () => {
       alive = false;
     };
-  }, [selectedBarberId, day, serviceMinutes, slotsRefreshKey]);
+  }, [selectedBarberId, serviceId, day, slotsRefreshKey]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -152,8 +153,12 @@ export default function BookingForm({
     if (!selectedBarberId) return setError("Selecciona un barbero.");
     if (!serviceId) return setError("Selecciona un servicio.");
     if (!day) return setError("Selecciona un día.");
-    if (!selectedSlot) return setError("Selecciona un horario disponible.");
+    if (!selectedSlot) return setError("Selecciona un horario.");
     if (clientName.trim().length < 2) return setError("Nombre muy corto.");
+
+    // No permitir reservar un slot ocupado (defensa extra)
+    const picked = slots.find((s) => s.start_time === selectedSlot);
+    if (picked && !picked.available) return setError("Ese horario ya está ocupado.");
 
     const phoneDigits = clientPhone.trim().replace(/[^\d]/g, "");
     const phoneOk = phoneDigits.length >= 8;
@@ -183,13 +188,11 @@ export default function BookingForm({
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.detail || `Error ${r.status}`);
 
-      // ✅ Mensaje de confirmación (por ahora: se abre WhatsApp del cliente si dejó teléfono)
-      // (NOTA: envío automático real se hace en backend, después lo hacemos)
       const barberName = selectedBarber?.name || "OsoBarber";
       const serviceName = selectedService?.name || "servicio";
       const hhmm = formatTime(selectedSlot);
 
-      const msg = `Hola ${clientName.trim()} 👋\n\nGracias por agendar con OsoBarber. Tu reserva quedó confirmada ✅\n\n• Servicio: ${serviceName}\n• Barbero: ${barberName}\n• Día: ${day}\n• Hora: ${hhmm}\n\nSi necesitas cambiar la hora, escríbenos:\n📧 ${BUSINESS_EMAIL}\n📱 ${BUSINESS_WA_DISPLAY}\n\nOsoBarber • San Bernardo`;
+      const msg = `Hola ${clientName.trim()} 👋\n\nGracias por agendar con OsoBarber. Tu reserva quedó confirmada ✅\n\n• Servicio: ${serviceName}\n• Barbero: ${barberName}\n• Día: ${day}\n• Hora: ${hhmm}\n\nSi necesitas cambiar o cancelar, entra a la app o escríbenos:\n📧 ${BUSINESS_EMAIL}\n📱 ${BUSINESS_WA_DISPLAY}\n\nOsoBarber • San Bernardo`;
 
       // Limpia inputs
       setClientName("");
@@ -204,9 +207,7 @@ export default function BookingForm({
       if (phoneOk) {
         window.open(waLink(clientPhone, msg), "_blank", "noopener,noreferrer");
       } else {
-        // Si solo puso correo, mostramos mensaje en pantalla (por ahora)
-        // (luego el backend enviará el email automático)
-        alert("Reserva creada ✅\n\nTe llegará un correo de confirmación (lo activamos en backend en el siguiente paso).");
+        alert("Reserva creada ✅\n\nTe llegará un correo de confirmación (si está activado en backend).");
       }
     } catch (e: any) {
       setError(e?.message || "No se pudo crear la reserva.");
@@ -219,16 +220,15 @@ export default function BookingForm({
     if (!selectedBarberId || !serviceId || !day) return "Elige barbero, servicio y día para ver horas.";
     if (loadingSlots) return "Cargando horarios…";
     if (slotsError) return `Error: ${slotsError}`;
-    if (slots.length === 0) return "No hay horas disponibles para ese día.";
+    if (slots.length === 0) return "No hay horas configuradas para ese día.";
+    if (availableCount === 0) return "No hay horas disponibles para ese día.";
     return "";
-  }, [selectedBarberId, serviceId, day, loadingSlots, slotsError, slots.length]);
+  }, [selectedBarberId, serviceId, day, loadingSlots, slotsError, slots.length, availableCount]);
 
   return (
     <section className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
       <h2 className="text-xl font-semibold">Reservar hora</h2>
-      <p className="mt-1 text-sm text-white/60">
-        Elige barbero, servicio, día y luego una hora disponible.
-      </p>
+      <p className="mt-1 text-sm text-white/60">Elige barbero, servicio, día y luego una hora.</p>
 
       <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
         <div className="grid gap-2">
@@ -267,8 +267,6 @@ export default function BookingForm({
               ))
             )}
           </select>
-
-          {/* Duración oculta a propósito */}
         </div>
 
         <div className="grid gap-2">
@@ -284,9 +282,9 @@ export default function BookingForm({
         <div className="mt-1 rounded-3xl border border-white/10 bg-black/30 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-white">Horas disponibles</div>
+              <div className="text-sm font-semibold text-white">Horarios</div>
               <div className="text-xs text-white/60">
-                {day} {loadingSlots ? "• cargando…" : slots.length ? `• ${slots.length} slots` : ""}
+                {day} {loadingSlots ? "• cargando…" : slots.length ? `• ${availableCount} disponibles` : ""}
               </div>
             </div>
 
@@ -304,20 +302,28 @@ export default function BookingForm({
             <div className="mt-3 text-sm text-white/60">{slotEmptyText}</div>
           ) : (
             <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {slots.map((start) => {
+              {slots.map((s) => {
+                const start = s.start_time;
                 const active = selectedSlot === start;
+                const disabled = !s.available;
+
                 return (
                   <button
                     key={start}
                     type="button"
-                    onClick={() => setSelectedSlot(start)}
+                    disabled={disabled}
+                    onClick={() => {
+                      if (!disabled) setSelectedSlot(start);
+                    }}
                     className={[
                       "h-10 rounded-2xl border px-2 text-sm font-semibold transition",
                       active
                         ? "border-white/40 bg-white text-black"
+                        : disabled
+                        ? "border-white/5 bg-white/5 text-white/30 line-through cursor-not-allowed"
                         : "border-white/10 bg-white/5 text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white",
                     ].join(" ")}
-                    title={start}
+                    title={disabled ? "Ocupado" : start}
                   >
                     {formatTime(start)}
                   </button>
@@ -362,15 +368,12 @@ export default function BookingForm({
         </div>
 
         <div className="text-xs text-white/50">
-          Si necesitas ayuda, escríbenos:{" "}
-          <span className="text-white/70">{BUSINESS_EMAIL}</span> •{" "}
+          Si necesitas ayuda, escríbenos: <span className="text-white/70">{BUSINESS_EMAIL}</span> •{" "}
           <span className="text-white/70">{BUSINESS_WA_DISPLAY}</span>
         </div>
 
         {error ? (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
-            {error}
-          </div>
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{error}</div>
         ) : null}
 
         <button
@@ -382,8 +385,7 @@ export default function BookingForm({
         </button>
 
         <div className="text-xs text-white/50">
-          Después de reservar: si el cliente dejó WhatsApp, se abre el mensaje listo para enviar. (En el siguiente paso lo
-          dejamos automático desde backend.)
+          Tip: horarios ocupados aparecen tachados y no se pueden seleccionar.
         </div>
       </form>
     </section>

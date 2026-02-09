@@ -19,6 +19,7 @@ function BookingInner() {
   const searchParams = useSearchParams();
   const preselectedServiceId = searchParams.get("service_id") || "";
 
+  // ✅ Debe incluir /api/v1 (ej: http://127.0.0.1:8001/api/v1)
   const base = process.env.NEXT_PUBLIC_API_URL || "";
 
   const [barbers, setBarbers] = useState<Barber[]>([]);
@@ -62,6 +63,7 @@ function BookingInner() {
         setBarbers(b);
         setServices(s);
 
+        // default barber
         setSelectedBarberId((prev) => prev || b[0]?.id || "");
       } catch (e: any) {
         if (!alive) return;
@@ -86,7 +88,7 @@ function BookingInner() {
           Elige barbero, servicio, día y horario disponible.
         </p>
         <p className="mt-2 text-xs text-white/50">
-          Horarios: Lun–Vie 19:00–22:00 • Sáb–Dom 10:00–23:00
+          Horarios: Lun–Vie 19:00–22:00 • Sáb 10:00–22:00 • Dom 10:00–21:00
         </p>
       </div>
 

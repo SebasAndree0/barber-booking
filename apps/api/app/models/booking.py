@@ -1,8 +1,11 @@
 import uuid
-from sqlalchemy import Column, DateTime, ForeignKey, String
+
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+
 from app.db.base import Base
+
 
 class Booking(Base):
     __tablename__ = "bookings"
@@ -17,6 +20,10 @@ class Booking(Base):
     client_email = Column(String(255), nullable=True, index=True)
 
     start_time = Column(DateTime(timezone=True), nullable=False, index=True)
-    end_time = Column(DateTime(timezone=True), nullable=True)  # cámbialo a False cuando lo tengas calculado
+    end_time = Column(DateTime(timezone=True), nullable=False)  # ✅ ahora NOT NULL
+
+    # ✅ Nuevo: estado + cancelación
+    status = Column(Text, nullable=False, server_default="CONFIRMED")
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

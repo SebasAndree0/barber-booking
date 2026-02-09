@@ -16,16 +16,17 @@ TZ = ZoneInfo("America/Santiago")
 # ✅ Horarios fijos:
 # Lun–Vie 19:00–22:00
 # Sáb–Dom 10:00–23:00
+
 HOURS = {
-    0: ("19:00", "23:00"),  # Lunes
-    1: ("19:00", "23:00"),  # Martes
-    2: ("19:00", "23:00"),  # Miércoles
-    3: ("19:00", "23:00"),  # Jueves
-    4: ("19:00", "23:00"),  # Viernes
-    5: ("10:00", "23:00"),  # Sábado
-    6: ("10:00", "23:00"),  # Domingo
-    # 6: None,  # si quieres domingo cerrado
+    0: ("19:00", "22:00"),  # Lunes
+    1: ("19:00", "22:00"),  # Martes
+    2: ("19:00", "22:00"),  # Miércoles
+    3: ("19:00", "22:00"),  # Jueves
+    4: ("19:00", "22:00"),  # Viernes
+    5: ("10:00", "22:00"),  # Sábado
+    6: ("10:00", "21:00"),  # Domingo
 }
+
 
 def parse_hhmm(s: str) -> time:
     hh, mm = s.split(":")

@@ -1,4 +1,3 @@
-
 import type { Metadata } from "next";
 import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -17,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "OsoBarber • San Bernardo",
   description: "Reserva tu hora online en OsoBarber. Cortes, barba y cejas.",
+  verification: {
+    google: "R4y1S-CSM8bOxPSa3jvNtKZNJgh_crmTBekPw99VYoQ",
+  },
 };
 
 export default function RootLayout({
@@ -47,9 +49,9 @@ export default function RootLayout({
               <div>
                 <div className="text-sm font-semibold">Horario</div>
                 <ul className="mt-2 space-y-1 text-sm text-white/60">
-                  <li>Lun–Vie: 10:00 – 20:00</li>
-                  <li>Sábado: 10:00 – 18:00</li>
-                  <li>Domingo: Cerrado</li>
+                  <li>Lun–Vie: 19:00 – 22:00</li>
+                  <li>Sábado: 10:00 – 22:00</li>
+                  <li>Domingo: 10:00 – 21:00</li>
                 </ul>
               </div>
 
@@ -61,13 +63,17 @@ export default function RootLayout({
                   <li className="flex gap-3 pt-2">
                     <a
                       className="text-white/70 hover:text-white underline underline-offset-4"
-                      href="#"
+                      href="https://www.instagram.com/osobarberr_?igsh=bG9uaGxzYnkxOXF0"
+                      target="_blank"
+                      rel="noreferrer"
                     >
                       Instagram
                     </a>
                     <a
                       className="text-white/70 hover:text-white underline underline-offset-4"
-                      href="#"
+                      href="https://www.tiktok.com/@oso.barber.cl"
+                      target="_blank"
+                      rel="noreferrer"
                     >
                       TikTok
                     </a>
@@ -77,9 +83,9 @@ export default function RootLayout({
             </div>
 
             <div className="border-t border-white/10 py-4">
-              <div className="mx-auto max-w-6xl px-6 text-xs text-white/50 flex items-center justify-between">
+              <div className="mx-auto flex max-w-6xl items-center justify-between px-6 text-xs text-white/50">
                 <span>© {new Date().getFullYear()} OsoBarber</span>
-                <span>Hecho con ❤️ en Chile</span>
+                <span className="text-white/50">Reservas online • San Bernardo</span>
               </div>
             </div>
           </footer>

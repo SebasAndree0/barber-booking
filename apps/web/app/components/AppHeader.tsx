@@ -8,13 +8,16 @@ import { useRouter, usePathname } from "next/navigation";
 function NavItem({
   href,
   children,
+  onClick,
 }: {
   href: string;
   children: React.ReactNode;
+  onClick?: () => void;
 }) {
   return (
     <Link
       href={href}
+      onClick={onClick}
       className="rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-white/10 hover:text-white transition"
     >
       {children}
@@ -28,6 +31,8 @@ export default function AppHeader() {
 
   const timer = useRef<number | null>(null);
   const [hint, setHint] = useState(false);
+
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   function startPress() {
     setHint(true);
@@ -56,6 +61,11 @@ export default function AppHeader() {
 
   // Si estás en Home, usamos secciones (#...), si estás en otra página, te manda al home + hash
   const to = (hash: string) => (pathname === "/" ? hash : `/${hash}`);
+
+  // Cierra menú móvil al cambiar de ruta
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-black/50 backdrop-blur">
@@ -91,16 +101,27 @@ export default function AppHeader() {
           </div>
         </Link>
 
-        {/* Nav */}
+        {/* Desktop Nav */}
         <nav className="hidden items-center gap-1 md:flex">
           <NavItem href={to("#quienes-somos")}>Quiénes somos</NavItem>
-          <NavItem href={to("#servicios")}>Cortes</NavItem>
+          <NavItem href={to("#servicios")}>Servicios</NavItem>
           <NavItem href={to("#ubicacion")}>Ubicación</NavItem>
           <NavItem href={to("#contacto")}>Contacto</NavItem>
+          <NavItem href="/my-bookings">Mis reservas</NavItem>
         </nav>
 
-        {/* CTA */}
+        {/* Right side */}
         <div className="flex items-center gap-2">
+          {/* Mobile menu button */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            className="md:hidden rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            aria-label="Abrir menú"
+          >
+            {mobileOpen ? "✕" : "☰"}
+          </button>
+
           <Link
             href="/booking"
             className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90 transition"
@@ -109,6 +130,39 @@ export default function AppHeader() {
           </Link>
         </div>
       </div>
+
+      {/* Mobile menu panel */}
+      {mobileOpen && (
+        <div className="md:hidden border-t border-white/10 bg-black/70 backdrop-blur">
+          <div className="mx-auto max-w-6xl px-6 py-3 grid gap-1">
+            <NavItem href={to("#quienes-somos")} onClick={() => setMobileOpen(false)}>
+              Quiénes somos
+            </NavItem>
+            <NavItem href={to("#servicios")} onClick={() => setMobileOpen(false)}>
+              Cortes
+            </NavItem>
+            <NavItem href={to("#ubicacion")} onClick={() => setMobileOpen(false)}>
+              Ubicación
+            </NavItem>
+            <NavItem href={to("#contacto")} onClick={() => setMobileOpen(false)}>
+              Contacto
+            </NavItem>
+            <NavItem href="/my-bookings" onClick={() => setMobileOpen(false)}>
+              Mis reservas
+            </NavItem>
+
+            <div className="pt-2">
+              <Link
+                href="/booking"
+                onClick={() => setMobileOpen(false)}
+                className="inline-flex w-full items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90 transition"
+              >
+                Reservar ahora
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

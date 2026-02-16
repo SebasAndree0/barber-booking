@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 
 type Booking = {
   id: string;
@@ -15,6 +14,11 @@ type Booking = {
   end_time: string;
   status: string;
   cancelled_at?: string | null;
+};
+
+type Props = {
+  initialName?: string;
+  initialAutosearch?: string;
 };
 
 function apiUrl(path: string) {
@@ -80,9 +84,8 @@ function normalizeStatus(status: string) {
   return { label: up || "—", className: "text-white/70" };
 }
 
-export default function MyBookingsClient() {
+export default function MyBookingsClient({ initialName, initialAutosearch }: Props) {
   const base = process.env.NEXT_PUBLIC_API_URL || "";
-  const sp = useSearchParams();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -183,7 +186,6 @@ export default function MyBookingsClient() {
 
       const best = pickBestClientName(sorted);
       if (best) {
-        // si la API devuelve reservas, usamos el nombre real guardado
         const parts = best.split(" ");
         setFirstName(parts[0] || "");
         setLastName(parts.slice(1).join(" ") || "");
@@ -196,10 +198,10 @@ export default function MyBookingsClient() {
     }
   }
 
-  // ✅ 1) cargar name desde querystring o localStorage
+  // ✅ cargar name desde querystring (server) o localStorage
   useEffect(() => {
-    const qName = cleanName(sp.get("name") || "");
-    const qAuto = cleanName(sp.get("autosearch") || "");
+    const qName = cleanName(initialName || "");
+    const qAuto = cleanName(initialAutosearch || "");
 
     const saved = cleanName(window.localStorage.getItem("osb_client_name") || "");
     const finalName = qName || saved;
@@ -210,12 +212,11 @@ export default function MyBookingsClient() {
       setLastName(parts.slice(1).join(" ") || "");
     }
 
-    // ✅ 2) si viene autosearch=1, buscar altiro
     if (finalName && qAuto === "1") {
       loadBookings(finalName);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sp]);
+  }, [initialName, initialAutosearch]);
 
   async function cancelBooking(id: string) {
     if (!confirm("¿Cancelar esta reserva?")) return;
@@ -228,7 +229,6 @@ export default function MyBookingsClient() {
 
     setErr(null);
     try {
-      // ✅ NUEVO: cancel por name
       const r = await fetch(
         apiUrl(`/bookings/${encodeURIComponent(id)}/cancel?name=${encodeURIComponent(nameToUse)}`),
         { method: "POST" }
@@ -265,7 +265,6 @@ export default function MyBookingsClient() {
       qs.set("day", dayInChileYYYYMMDD(b.start_time));
     }
 
-    // ✅ ya no usamos email
     if (cleanName(fullName)) qs.set("name", cleanName(fullName));
     else if (b.client_name) qs.set("name", cleanName(b.client_name));
 
@@ -416,9 +415,7 @@ export default function MyBookingsClient() {
           <div className="mt-4 grid gap-3">
             {!loading && !err && visibleItems.length === 0 ? (
               <div className="rounded-xl border border-white/10 bg-black/30 p-4 text-sm text-white/70">
-                {showPast
-                  ? "No hay reservas para mostrar."
-                  : "No tienes reservas futuras. (Activa “Ver pasadas” si quieres)"}
+                {showPast ? "No hay reservas para mostrar." : "No tienes reservas futuras. (Activa “Ver pasadas” si quieres)"}
               </div>
             ) : (
               visibleItems.map((b) => {

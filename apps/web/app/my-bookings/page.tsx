@@ -1,5 +1,11 @@
 import { Suspense } from "react";
-import MyBookingsClient from "./MyBookingsClient";
+import dynamicImport from "next/dynamic";
+
+export const dynamic = "force-dynamic";
+
+const MyBookingsClient = dynamicImport(() => import("./MyBookingsClient"), {
+  ssr: false,
+});
 
 export default function Page({
   searchParams,

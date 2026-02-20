@@ -1,0 +1,214 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 280" fill="none" role="img" aria-label="OSO BARBER • Reserva Online">
+  <defs>
+    <style>
+      :root{
+        /* Texto: por defecto blanco (queda brutal en fondo oscuro) */
+        --text:#F2F3F7;
+
+        /* ✅ OSO llamativo (caramelo/naranjo premium) */
+        --bearHi:#FFC36B;     /* brillo caramelo */
+        --bearMid:#E07A2F;    /* naranjo pro */
+        --bearDeep:#6B2D16;   /* chocolate */
+        --bearInner:#2A140C;  /* interior orejas */
+        --bearMuzzle:#FFE3C8; /* hocico cálido */
+
+        /* ✅ Tijeras metal + brillo frío */
+        --metal1:#F4F7FF;
+        --metal2:#8B95A8;
+        --steelGlow:#9AD7FF;  /* reflejo sutil (llamativo pero pro) */
+      }
+    </style>
+
+    <!-- Degradado oso -->
+    <linearGradient id="gBear" x1="40" y1="20" x2="235" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="var(--bearHi)"/>
+      <stop offset="0.45" stop-color="var(--bearMid)"/>
+      <stop offset="1" stop-color="var(--bearDeep)"/>
+    </linearGradient>
+
+    <!-- Sombra/volumen oso -->
+    <radialGradient id="gBearShade" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(175 160) rotate(20) scale(140 120)">
+      <stop stop-color="#000000" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Brillo oso -->
+    <radialGradient id="gBearGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(110 70) rotate(35) scale(150 150)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Metal tijeras -->
+    <linearGradient id="gMetal" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="var(--metal1)"/>
+      <stop offset="1" stop-color="var(--metal2)"/>
+    </linearGradient>
+
+    <!-- Glow frío en filo -->
+    <linearGradient id="gSteelGlow" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="var(--steelGlow)" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="var(--steelGlow)" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="var(--steelGlow)" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="shadowSoft" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <!-- ===== OSO (SOLO) ===== -->
+  <g transform="translate(40 26)" filter="url(#shadowSoft)">
+    <!-- Orejas -->
+    <circle cx="86" cy="62" r="26" fill="url(#gBear)"/>
+    <circle cx="194" cy="62" r="26" fill="url(#gBear)"/>
+    <circle cx="86" cy="62" r="16" fill="var(--bearInner)" opacity="0.55"/>
+    <circle cx="194" cy="62" r="16" fill="var(--bearInner)" opacity="0.55"/>
+
+    <!-- Cabeza -->
+    <path
+      d="M140 34
+         C92 34 56 68 56 114
+         C56 156 86 192 126 202
+         C135 204 145 204 154 202
+         C194 192 224 156 224 114
+         C224 68 188 34 140 34Z"
+      fill="url(#gBear)"
+    />
+
+    <!-- Volumen extra -->
+    <path
+      d="M140 34
+         C92 34 56 68 56 114
+         C56 156 86 192 126 202
+         C135 204 145 204 154 202
+         C194 192 224 156 224 114
+         C224 68 188 34 140 34Z"
+      fill="url(#gBearShade)"
+      opacity="0.9"
+    />
+
+    <!-- Brillo suave -->
+    <path
+      d="M140 38
+         C98 38 66 68 66 106
+         C66 128 78 150 98 166"
+      stroke="url(#gBearGlow)"
+      stroke-width="18"
+      stroke-linecap="round"
+      opacity="0.95"
+    />
+
+    <!-- Hocico -->
+    <path
+      d="M140 102
+         C110 102 90 122 90 146
+         C90 170 112 190 140 190
+         C168 190 190 170 190 146
+         C190 122 170 102 140 102Z"
+      fill="var(--bearMuzzle)"
+      opacity="0.42"
+    />
+
+    <!-- Ojos -->
+    <circle cx="112" cy="118" r="6" fill="#0B0E16" opacity="0.92"/>
+    <circle cx="168" cy="118" r="6" fill="#0B0E16" opacity="0.92"/>
+
+    <!-- Cejas -->
+    <path d="M98 110 C106 104 116 104 124 110" stroke="#0B0E16" stroke-width="6" stroke-linecap="round" opacity="0.22"/>
+    <path d="M156 110 C164 104 174 104 182 110" stroke="#0B0E16" stroke-width="6" stroke-linecap="round" opacity="0.22"/>
+
+    <!-- Nariz -->
+    <path
+      d="M140 132
+         C130 132 122 138 122 147
+         C122 156 130 163 140 163
+         C150 163 158 156 158 147
+         C158 138 150 132 140 132Z"
+      fill="#0B0E16"
+      opacity="0.96"
+    />
+
+    <!-- Boca -->
+    <path
+      d="M128 170
+         C134 178 140 181 140 181
+         C140 181 146 178 152 170"
+      stroke="#0B0E16"
+      stroke-width="8"
+      stroke-linecap="round"
+      opacity="0.42"
+    />
+    <path d="M140 163 V172" stroke="#0B0E16" stroke-width="6" stroke-linecap="round" opacity="0.22"/>
+
+    <!-- Outline sutil (define y se ve más pro) -->
+    <path
+      d="M140 34
+         C92 34 56 68 56 114
+         C56 156 86 192 126 202
+         C135 204 145 204 154 202
+         C194 192 224 156 224 114
+         C224 68 188 34 140 34Z"
+      fill="none"
+      stroke="#0B0E16"
+      stroke-width="2"
+      opacity="0.12"
+    />
+  </g>
+
+  <!-- ===== TIJERAS (más separadas del oso) ===== -->
+  <g transform="translate(360 74)" filter="url(#shadowSoft)">
+    <!-- Aros -->
+    <circle cx="42" cy="128" r="18" fill="none" stroke="url(#gMetal)" stroke-width="8"/>
+    <circle cx="94" cy="128" r="18" fill="none" stroke="url(#gMetal)" stroke-width="8"/>
+
+    <!-- Pivote -->
+    <circle cx="68" cy="108" r="7" fill="var(--text)" opacity="0.22"/>
+
+    <!-- Hojas -->
+    <path d="M64 108 L154 20" stroke="url(#gMetal)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M72 108 L-18 22" stroke="url(#gMetal)" stroke-width="10" stroke-linecap="round"/>
+
+    <!-- Glow fino (se ve “llamativo” sin verse flúor) -->
+    <path d="M64 108 L154 20" stroke="url(#gSteelGlow)" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+    <path d="M72 108 L-18 22" stroke="url(#gSteelGlow)" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+
+    <!-- Detalles mango -->
+    <path d="M54 112 L34 98" stroke="url(#gMetal)" stroke-width="9" stroke-linecap="round" opacity="0.95"/>
+    <path d="M82 112 L102 98" stroke="url(#gMetal)" stroke-width="9" stroke-linecap="round" opacity="0.70"/>
+  </g>
+
+  <!-- ===== TEXTO (igual de hermoso) ===== -->
+  <g transform="translate(560 52)">
+    <text x="0" y="92"
+      font-family="Poppins, Montserrat, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+      font-size="76"
+      font-weight="800"
+      letter-spacing="2"
+      fill="var(--text)">
+      OSO
+    </text>
+
+    <text x="0" y="156"
+      font-family="Poppins, Montserrat, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+      font-size="86"
+      font-weight="900"
+      letter-spacing="3"
+      fill="var(--text)">
+      BARBER
+    </text>
+
+    <text x="2" y="200"
+      font-family="Poppins, Montserrat, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+      font-size="22"
+      font-weight="600"
+      letter-spacing="6"
+      fill="var(--text)"
+      opacity="0.72">
+      RESERVA ONLINE
+    </text>
+
+    <path d="M2 214 H560" stroke="var(--text)" opacity="0.10" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

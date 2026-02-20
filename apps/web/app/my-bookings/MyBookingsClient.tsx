@@ -21,18 +21,53 @@ type Props = {
   initialAutosearch?: string;
 };
 
+/* ---------------- API ----------------
+   ✅ Mejor: si NO hay NEXT_PUBLIC_API_URL, usamos el rewrite /api/v1
+*/
 function apiUrl(path: string) {
-  const base = process.env.NEXT_PUBLIC_API_URL || "";
+  const envBase = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+  const base = envBase ? envBase : "/api/v1";
   const cleanBase = base.replace(/\/+$/, "");
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   return `${cleanBase}${cleanPath}`;
 }
 
+/* ---------------- Utils ---------------- */
+
 function cleanName(s: string) {
   return (s || "").trim().replace(/\s+/g, " ");
 }
 
-// ✅ FIX: calcular YYYY-MM-DD en zona horaria Chile (evita que se corra al día siguiente por UTC)
+function fmtDateCL(iso: string) {
+  return new Intl.DateTimeFormat("es-CL", {
+    timeZone: "America/Santiago",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(iso));
+}
+
+function fmtTimeCL(iso: string) {
+  return new Intl.DateTimeFormat("es-CL", {
+    timeZone: "America/Santiago",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+}
+
+function isPast(isoStart: string) {
+  return new Date(isoStart).getTime() <= Date.now();
+}
+
+function safeTimeRange(startIso: string, endIso: string) {
+  const s = new Date(startIso).getTime();
+  const e = new Date(endIso).getTime();
+  if (!Number.isFinite(e) || e <= s) return fmtTimeCL(startIso);
+  return `${fmtTimeCL(startIso)} – ${fmtTimeCL(endIso)}`;
+}
+
+// ✅ FIX: calcular YYYY-MM-DD en zona horaria Chile (para booking day)
 function dayInChileYYYYMMDD(iso: string) {
   const d = new Date(iso);
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -48,45 +83,278 @@ function dayInChileYYYYMMDD(iso: string) {
   return `${y}-${m}-${da}`;
 }
 
-function fmtDateCL(iso: string) {
-  const d = new Date(iso);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("es-CL", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-function isPast(isoStart: string) {
-  return new Date(isoStart).getTime() <= Date.now();
-}
-
-function safeTimeRange(startIso: string, endIso: string) {
-  const s = new Date(startIso).getTime();
-  const e = new Date(endIso).getTime();
-  if (!Number.isFinite(e) || e <= s) return fmtTime(startIso);
-  return `${fmtTime(startIso)} – ${fmtTime(endIso)}`;
-}
-
 function normalizeStatus(status: string) {
   const up = (status || "").toUpperCase();
-  if (up === "CANCELLED") return { label: "CANCELADA", className: "text-rose-200" };
-  if (up === "CONFIRMED") return { label: "CONFIRMADA", className: "text-emerald-200" };
-  if (up === "PENDING") return { label: "PENDIENTE", className: "text-amber-200" };
-  if (up === "ACTIVE") return { label: "ACTIVA", className: "text-emerald-200" };
-  return { label: up || "—", className: "text-white/70" };
+
+  if (up === "CANCELLED")
+    return {
+      label: "CANCELADA",
+      pill: "border-rose-300/20 bg-rose-300/10 text-rose-200",
+    };
+
+  if (up === "CONFIRMED" || up === "ACTIVE")
+    return {
+      label: up === "CONFIRMED" ? "CONFIRMADA" : "ACTIVA",
+      pill: "border-emerald-300/20 bg-emerald-300/10 text-emerald-200",
+    };
+
+  if (up === "PENDING")
+    return {
+      label: "PENDIENTE",
+      pill: "border-amber-300/25 bg-amber-300/10 text-amber-200",
+    };
+
+  return { label: up || "—", pill: "border-white/10 bg-white/[0.05] text-white/70" };
 }
 
-export default function MyBookingsClient({ initialName, initialAutosearch }: Props) {
-  const base = process.env.NEXT_PUBLIC_API_URL || "";
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
 
+/* ---------------- Icons (pro) ---------------- */
+
+function IconSearch(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path
+        d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M16.5 16.5 21 21"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IconClock(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M12 7v6l4 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconRefresh(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path
+        d="M20 6v6h-6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4 18v-6h6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M20 12a8 8 0 0 0-14.7-4"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4 12a8 8 0 0 0 14.7 4"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IconEdit(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path
+        d="M12 20h9"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconX(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path d="M6 6l12 12" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M18 6 6 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconEyeOff(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path
+        d="M3 3l18 18"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.6 10.6a2.5 2.5 0 0 0 3.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.4 6.6C4.5 8 3.2 10 2.6 12c1.5 5 6 8 9.4 8 1.3 0 2.7-.3 4-.9"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9 4.7c1-.4 2-.7 3-.7 3.4 0 7.9 3 9.4 8-.4 1.3-1 2.6-2 3.7"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IconWhatsApp(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path d="M20 11.7A8 8 0 1 1 11.7 4a8 8 0 0 1 8.3 7.7Z" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M7.5 19.5 8.6 17a7.9 7.9 0 0 0 3.1.6 7.8 7.8 0 0 0 7.8-7.8"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.2 9.2c-.3.5-.3 1.2.1 1.9.6 1 1.8 2.3 3 2.9.7.4 1.4.4 1.9.1l.7-.5c.3-.2.8-.2 1.1 0l1 .7"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/* ---------------- UI primitives ---------------- */
+
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={cx(
+        "rounded-3xl border border-white/10 bg-white/[0.05] backdrop-blur",
+        "shadow-[0_20px_70px_rgba(0,0,0,0.35)]",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Pill({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05]",
+        "px-3 py-1.5 text-[11px] font-semibold tracking-wide text-white/75",
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Button({
+  children,
+  className = "",
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string }) {
+  return (
+    <button
+      {...props}
+      className={cx(
+        "inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+        className
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function AButton({
+  children,
+  className = "",
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement> & { className?: string }) {
+  return (
+    <a
+      {...props}
+      className={cx(
+        "inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+        className
+      )}
+    >
+      {children}
+    </a>
+  );
+}
+
+function Input({
+  label,
+  value,
+  onChange,
+  placeholder,
+  hint,
+  onKeyDown,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  hint?: string;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+}) {
+  return (
+    <div className="grid gap-2">
+      <label className="text-sm text-white/75">{label}</label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        className={cx(
+          "h-11 rounded-2xl border border-white/10 bg-black/35 px-3 text-white outline-none",
+          "focus:border-amber-300/40 focus:ring-2 focus:ring-amber-300/10"
+        )}
+      />
+      {hint ? <div className="text-xs text-white/45">{hint}</div> : null}
+    </div>
+  );
+}
+
+/* ---------------- Component ---------------- */
+
+export default function MyBookingsClient({ initialName, initialAutosearch }: Props) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
 
@@ -96,17 +364,25 @@ export default function MyBookingsClient({ initialName, initialAutosearch }: Pro
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // ✅ Pro: ocultar pasadas por defecto
   const [showPast, setShowPast] = useState(false);
 
-  // ✅ Pro: “ocultar de mi vista” (localStorage)
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
 
   const canSearch = useMemo(() => {
     return cleanName(firstName).length >= 2 && cleanName(lastName).length >= 2;
   }, [firstName, lastName]);
 
-  // cargar hiddenIds
+  // ✅ Puedes mapear nombres de servicio si quieres (si coinciden con tus UUID reales)
+  const SERVICE_LABELS = useMemo(() => {
+    const map = new Map<string, string>();
+    map.set("11111111-1111-1111-1111-111111111111", "Corte");
+    map.set("11111111-1111-1111-1111-111111111112", "Corte + ceja");
+    map.set("11111111-1111-1111-1111-111111111113", "Corte + barba");
+    map.set("11111111-1111-1111-1111-111111111114", "Corte + ceja + barba");
+    return map;
+  }, []);
+
+  // local storage hidden
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem("osb_hidden_bookings") || "[]";
@@ -144,25 +420,17 @@ export default function MyBookingsClient({ initialName, initialAutosearch }: Pro
     setErr(null);
 
     const nameToUse = cleanName(name ?? fullName);
-
-    if (!base) {
-      setErr("Falta NEXT_PUBLIC_API_URL en apps/web/.env.local (ej: http://127.0.0.1:8001/api/v1)");
-      return;
-    }
-
     if (nameToUse.length < 4 || !nameToUse.includes(" ")) {
-      setErr("Ingresa Nombre y Apellido (ambos).");
+      setErr("Ingresa tu **Nombre y Apellido** (tal como lo pusiste al reservar).");
       return;
     }
 
     setLoading(true);
     try {
-      // guardamos para autocompletar después
       try {
         window.localStorage.setItem("osb_client_name", nameToUse);
       } catch {}
 
-      // ✅ NUEVO endpoint: /bookings/my?name=...
       const r = await fetch(apiUrl(`/bookings/my?name=${encodeURIComponent(nameToUse)}`), {
         cache: "no-store",
       });
@@ -171,7 +439,6 @@ export default function MyBookingsClient({ initialName, initialAutosearch }: Pro
 
       const list = Array.isArray(j) ? (j as Booking[]) : [];
 
-      // upcoming arriba, past abajo
       const upcoming = list
         .filter((b) => !isPast(b.start_time))
         .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
@@ -180,15 +447,17 @@ export default function MyBookingsClient({ initialName, initialAutosearch }: Pro
         .filter((b) => isPast(b.start_time))
         .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
 
-      const sorted = [...upcoming, ...past];
+      setItems([...upcoming, ...past]);
 
-      setItems(sorted);
-
-      const best = pickBestClientName(sorted);
+      const best = pickBestClientName([...upcoming, ...past]);
       if (best) {
         const parts = best.split(" ");
         setFirstName(parts[0] || "");
         setLastName(parts.slice(1).join(" ") || "");
+      }
+
+      if (list.length === 0) {
+        setErr("No encontramos reservas con ese nombre. Revisa que esté escrito igual que al agendar.");
       }
     } catch (e: any) {
       setItems([]);
@@ -198,11 +467,10 @@ export default function MyBookingsClient({ initialName, initialAutosearch }: Pro
     }
   }
 
-  // ✅ cargar name desde querystring (server) o localStorage
+  // init from querystring / localStorage
   useEffect(() => {
     const qName = cleanName(initialName || "");
     const qAuto = cleanName(initialAutosearch || "");
-
     const saved = cleanName(window.localStorage.getItem("osb_client_name") || "");
     const finalName = qName || saved;
 
@@ -235,7 +503,6 @@ export default function MyBookingsClient({ initialName, initialAutosearch }: Pro
       );
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.detail || `Error ${r.status}`);
-
       await loadBookings();
     } catch (e: any) {
       const msg = (e?.message || "").toLowerCase();
@@ -244,7 +511,7 @@ export default function MyBookingsClient({ initialName, initialAutosearch }: Pro
       } else if (msg.includes("pasada")) {
         setErr("Esa reserva ya pasó, por eso no se puede cancelar.");
       } else if (msg.includes("anticipación") || msg.includes("minutos")) {
-        setErr("Esa reserva está muy encima. Para cancelar, debe ser con anticipación.");
+        setErr("Esa reserva está muy encima. Para cancelar debe ser con anticipación.");
       } else {
         setErr(e?.message || "No se pudo cancelar la reserva.");
       }
@@ -253,7 +520,6 @@ export default function MyBookingsClient({ initialName, initialAutosearch }: Pro
 
   function buildEditHref(b: Booking) {
     const qs = new URLSearchParams();
-
     qs.set("mode", "reschedule");
     qs.set("booking_id", b.id);
 
@@ -291,223 +557,385 @@ export default function MyBookingsClient({ initialName, initialAutosearch }: Pro
     [items, hiddenIds]
   );
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-zinc-950 to-black text-white">
-      <header className="border-b border-white/10">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
-          <div>
-            <div className="text-lg font-semibold">Mis reservas</div>
-            <div className="text-xs text-white/60">Consulta y cancela tus horas con tu Nombre + Apellido</div>
+  const nextUpcoming = useMemo(() => {
+    const up = items
+      .filter((b) => !hiddenIds.has(b.id) && !isPast(b.start_time) && (b.status || "").toUpperCase() !== "CANCELLED")
+      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    return up[0] || null;
+  }, [items, hiddenIds]);
+
+  function BookingSkeleton() {
+    return (
+      <div className="rounded-3xl border border-white/10 bg-black/35 p-5 animate-pulse">
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid gap-2">
+            <div className="h-4 w-44 rounded bg-white/10" />
+            <div className="h-3 w-28 rounded bg-white/10" />
           </div>
-          <div className="flex gap-3">
-            <Link
-              href="/booking"
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              ← Reservar
-            </Link>
-            <Link
-              href="/"
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Inicio
-            </Link>
+          <div className="h-8 w-28 rounded-2xl bg-white/10" />
+        </div>
+        <div className="mt-4 h-10 w-full rounded-2xl bg-white/10" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-10 py-10">
+      {/* Top hero */}
+      <section className="relative overflow-hidden rounded-[2.6rem] border border-white/10 bg-white/[0.04]">
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/60 to-black/90" />
+          <div className="absolute inset-0 [background:radial-gradient(60%_55%_at_20%_10%,rgba(245,197,24,0.18),transparent_60%)]" />
+          <div className="absolute inset-0 [background:radial-gradient(55%_45%_at_85%_10%,rgba(255,255,255,0.06),transparent_55%)]" />
+        </div>
+
+        <div className="relative p-7 md:p-10">
+          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill>
+                  <span className="h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.35)]" />
+                  Mis reservas
+                </Pill>
+                <Pill className="text-white/65">Buscar • Reagendar • Cancelar</Pill>
+              </div>
+
+              <h1 className="mt-4 text-3xl md:text-5xl font-semibold tracking-tight leading-[1.02]">
+                Control total. <span className="text-amber-200/95">Sin llamadas.</span>
+              </h1>
+
+              <p className="mt-3 text-sm md:text-base text-white/65 max-w-2xl leading-relaxed">
+                Ingresa tu <b className="text-white/90">Nombre + Apellido</b> tal como lo pusiste al agendar.
+                Aquí puedes revisar, reagendar o cancelar (si aplica).
+              </p>
+
+              {nextUpcoming ? (
+                <div className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/75">
+                  <IconClock className="h-5 w-5 text-amber-200" />
+                  <span>
+                    Próxima: <b className="text-white/90">{fmtDateCL(nextUpcoming.start_time)}</b> •{" "}
+                    <b className="text-white/90">{safeTimeRange(nextUpcoming.start_time, nextUpcoming.end_time)}</b>
+                  </span>
+                  {SERVICE_LABELS.get(nextUpcoming.service_id) ? (
+                    <span className="ml-1 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold text-white/70">
+                      {SERVICE_LABELS.get(nextUpcoming.service_id)}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link
+                href="/booking"
+                className="inline-flex items-center justify-center rounded-2xl bg-amber-300 px-6 py-3 font-extrabold text-black hover:bg-amber-200 transition shadow-[0_18px_60px_rgba(245,158,11,0.16)]"
+              >
+                Agendar ahora
+              </Link>
+
+              <AButton
+                href={waLink}
+                target="_blank"
+                rel="noreferrer"
+                className="border border-white/12 bg-white/[0.06] text-white/90 hover:bg-white/10"
+              >
+                <IconWhatsApp className="h-5 w-5" />
+                WhatsApp
+              </AButton>
+            </div>
           </div>
         </div>
-      </header>
+      </section>
 
-      <main className="mx-auto grid max-w-5xl gap-6 px-6 py-8">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="text-lg font-semibold">Buscar</div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="grid gap-2">
-              <label className="text-sm text-white/70">Nombre</label>
-              <input
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Ej: Sebastián"
-                className="h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-sm text-white/70">Apellido</label>
-              <input
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                placeholder="Ej: Brenet"
-                className="h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
-              />
-              <div className="text-xs text-white/50">Usamos tu nombre para encontrar tus reservas.</div>
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-sm text-white/70">Acción</label>
-              <button
-                type="button"
-                onClick={() => loadBookings()}
-                disabled={loading || !canSearch}
-                className="h-11 rounded-xl bg-white px-4 font-semibold text-black disabled:opacity-60"
-              >
-                {loading ? "Buscando…" : "Ver mis reservas"}
-              </button>
-            </div>
+      {/* Search */}
+      <section className="grid gap-6">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.25em] text-white/45">OSOBARBER</div>
+            <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight">Buscar reservas</h2>
+            <p className="mt-2 text-sm text-white/60">Mientras más exacto el nombre, más rápido aparece todo.</p>
           </div>
 
-          {err && (
-            <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+          <div className="hidden md:flex gap-2">
+            <Button
+              type="button"
+              onClick={() => loadBookings()}
+              disabled={loading || !canSearch}
+              className={cx(
+                "border border-white/12 bg-white/[0.06] text-white/90 hover:bg-white/10",
+                "disabled:opacity-60 disabled:hover:bg-white/[0.06]"
+              )}
+            >
+              <IconRefresh className="h-5 w-5" />
+              Refrescar
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => setShowPast((v) => !v)}
+              className="border border-white/12 bg-black/35 text-white/85 hover:bg-white/10"
+            >
+              {showPast ? "Ocultar pasadas" : "Ver pasadas"}
+            </Button>
+          </div>
+        </div>
+
+        <Card className="p-6">
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+            <Input
+              label="Nombre"
+              value={firstName}
+              onChange={setFirstName}
+              placeholder="Ej: Sebastián"
+            />
+            <Input
+              label="Apellido"
+              value={lastName}
+              onChange={setLastName}
+              placeholder="Ej: Brenet"
+              hint=""
+              onKeyDown={(e) => {
+                if (e.key === "Enter") loadBookings();
+              }}
+            />
+
+            <Button
+              type="button"
+              onClick={() => loadBookings()}
+              disabled={loading || !canSearch}
+              className={cx(
+                "bg-amber-300 text-black font-extrabold hover:bg-amber-200",
+                "disabled:opacity-60 disabled:hover:bg-amber-300"
+              )}
+              title="Buscar mis reservas"
+            >
+              <IconSearch className="h-5 w-5" />
+              {loading ? "Buscando…" : "Ver mis reservas"}
+            </Button>
+          </div>
+
+          {/* Mobile controls */}
+          <div className="mt-4 flex md:hidden flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => loadBookings()}
+              disabled={loading || !canSearch}
+              className={cx(
+                "border border-white/12 bg-white/[0.06] text-white/90 hover:bg-white/10",
+                "disabled:opacity-60 disabled:hover:bg-white/[0.06]"
+              )}
+            >
+              <IconRefresh className="h-5 w-5" />
+              Refrescar
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => setShowPast((v) => !v)}
+              className="border border-white/12 bg-black/35 text-white/85 hover:bg-white/10"
+            >
+              {showPast ? "Ocultar pasadas" : "Ver pasadas"}
+            </Button>
+          </div>
+
+          {err ? (
+            <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
               {err}
             </div>
-          )}
+          ) : null}
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <a
-              href={waLink}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              ¿Dudas? WhatsApp →
-            </a>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-white/55">
+            <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1">
+              Próximas: <b className="text-white/75">{totalUpcoming}</b>
+            </span>
+            <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1">
+              Pasadas: <b className="text-white/75">{totalPast}</b>
+            </span>
+            {fullName ? (
+              <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1">
+                Cliente: <b className="text-white/75">{fullName}</b>
+              </span>
+            ) : null}
           </div>
+        </Card>
+      </section>
+
+      {/* List */}
+      <section className="grid gap-6">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.25em] text-white/45">OSOBARBER</div>
+          <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight">Tus reservas</h2>
+          <p className="mt-2 text-sm text-white/60">
+            Reagendar mantiene tu servicio y te lleva directo al calendario.
+          </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-lg font-semibold">Lista</div>
-              <div className="text-xs text-white/60">
-                {fullName ? `Cliente: ${fullName}` : "Cliente"}
-                {items.length ? ` • ${items.length} reservas` : ""}
+        <div className="grid gap-3">
+          {loading ? (
+            <>
+              <BookingSkeleton />
+              <BookingSkeleton />
+              <BookingSkeleton />
+            </>
+          ) : !err && visibleItems.length === 0 ? (
+            <Card className="p-6">
+              <div className="rounded-2xl border border-white/10 bg-black/35 p-6">
+                <div className="text-lg font-semibold">No hay reservas para mostrar</div>
+                <div className="mt-2 text-sm text-white/65 leading-relaxed">
+                  {showPast
+                    ? "No encontramos reservas con los filtros actuales."
+                    : "No tienes reservas futuras. Si quieres ver el historial, activa “Ver pasadas”."}
+                </div>
+
+                <div className="mt-5 flex flex-col sm:flex-row gap-3">
+                  <Link
+                    href="/booking"
+                    className="inline-flex items-center justify-center rounded-2xl bg-amber-300 px-6 py-3 font-extrabold text-black hover:bg-amber-200 transition"
+                  >
+                    Agendar ahora
+                  </Link>
+                  <AButton
+                    href={waLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="border border-white/12 bg-white/[0.06] text-white/90 hover:bg-white/10"
+                  >
+                    <IconWhatsApp className="h-5 w-5" />
+                    Hablar por WhatsApp
+                  </AButton>
+                </div>
               </div>
+            </Card>
+          ) : (
+            visibleItems.map((b) => {
+              const cancelled = (b.status || "").toUpperCase() === "CANCELLED";
+              const past = isPast(b.start_time);
+              const status = normalizeStatus(b.status);
 
-              <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-white/70">
-                  Próximas: {totalUpcoming}
-                </span>
-                <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-white/70">
-                  Pasadas: {totalPast}
-                </span>
-              </div>
-            </div>
+              const dateLabel = fmtDateCL(b.start_time);
+              const timeLabel = safeTimeRange(b.start_time, b.end_time);
 
-            <div className="grid gap-2 justify-items-end">
-              <button
-                type="button"
-                onClick={() => loadBookings()}
-                disabled={loading || !canSearch}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:opacity-60"
-              >
-                Refrescar
-              </button>
+              const serviceLabel = SERVICE_LABELS.get(b.service_id);
 
-              <button
-                type="button"
-                onClick={() => setShowPast((v) => !v)}
-                className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-              >
-                {showPast ? "Ocultar pasadas" : "Ver pasadas"}
-              </button>
-            </div>
-          </div>
+              return (
+                <Card key={b.id} className="p-5 relative overflow-hidden">
+                  {/* accent glow */}
+                  <div className="pointer-events-none absolute -top-24 -right-24 h-56 w-56 rounded-full bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.16),transparent_60%)] blur-2xl" />
 
-          <div className="mt-4 grid gap-3">
-            {!loading && !err && visibleItems.length === 0 ? (
-              <div className="rounded-xl border border-white/10 bg-black/30 p-4 text-sm text-white/70">
-                {showPast ? "No hay reservas para mostrar." : "No tienes reservas futuras. (Activa “Ver pasadas” si quieres)"}
-              </div>
-            ) : (
-              visibleItems.map((b) => {
-                const cancelled = (b.status || "").toUpperCase() === "CANCELLED";
-                const past = isPast(b.start_time);
-                const status = normalizeStatus(b.status);
-
-                const dateLabel = fmtDateCL(b.start_time);
-                const timeLabel = safeTimeRange(b.start_time, b.end_time);
-
-                return (
-                  <div key={b.id} className="rounded-xl border border-white/10 bg-black/30 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold">
+                  <div className="relative flex flex-col gap-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="grid gap-2">
+                        <div className="text-lg font-semibold tracking-tight">
                           {dateLabel} • {timeLabel}
                         </div>
 
-                        <div className="mt-1 text-sm text-white/60">
-                          Estado: <span className={status.className}>{status.label}</span>
-                          {past && !cancelled ? <span className="ml-2 text-xs text-white/40">(pasada)</span> : null}
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className={cx("rounded-full border px-3 py-1 font-semibold", status.pill)}>
+                            {status.label}
+                          </span>
+
+                          {past && !cancelled ? (
+                            <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-white/55">
+                              Historial
+                            </span>
+                          ) : null}
+
+                          {serviceLabel ? (
+                            <span className="rounded-full border border-white/10 bg-black/35 px-3 py-1 text-white/70">
+                              {serviceLabel}
+                            </span>
+                          ) : null}
+
+                          {b.cancelled_at ? (
+                            <span className="rounded-full border border-white/10 bg-black/35 px-3 py-1 text-white/55">
+                              Cancelada:{" "}
+                              {new Intl.DateTimeFormat("es-CL", {
+                                timeZone: "America/Santiago",
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: false,
+                              }).format(new Date(b.cancelled_at))}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2 justify-end">
                         <Link
                           href={buildEditHref(b)}
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-                          title="Reagendar con mismo servicio/día/hora"
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white/90 hover:bg-white/10 transition"
+                          title="Reagendar"
                         >
+                          <IconEdit className="h-5 w-5" />
                           Reagendar
                         </Link>
 
                         {cancelled ? (
-                          <button
+                          <Button
                             type="button"
                             disabled
-                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/50 opacity-60 cursor-not-allowed"
+                            className="border border-white/10 bg-white/[0.05] text-white/55 cursor-not-allowed opacity-70"
                           >
+                            <IconX className="h-5 w-5" />
                             Cancelada
-                          </button>
+                          </Button>
                         ) : past ? (
-                          <button
+                          <Button
                             type="button"
                             onClick={() => {
                               const next = new Set(hiddenIds);
                               next.add(b.id);
                               persistHidden(next);
                             }}
-                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                            className="border border-white/12 bg-black/35 text-white/85 hover:bg-white/10"
                             title="Oculta esta reserva solo en tu vista"
                           >
+                            <IconEyeOff className="h-5 w-5" />
                             Ocultar
-                          </button>
+                          </Button>
                         ) : (
-                          <button
+                          <Button
                             type="button"
                             onClick={() => cancelBooking(b.id)}
-                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                            className="border border-rose-300/25 bg-rose-300/10 text-rose-100 hover:bg-rose-300/15"
+                            title="Cancelar reserva"
                           >
+                            <IconX className="h-5 w-5" />
                             Cancelar
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
 
-                    <div className="mt-2 text-xs text-white/40 break-all">ID: {b.id}</div>
-                    {b.cancelled_at ? (
-                      <div className="mt-1 text-xs text-white/40">
-                        Cancelada: {new Date(b.cancelled_at).toLocaleString("es-CL")}
-                      </div>
-                    ) : null}
+                    {/* micro info */}
+                    <div className="text-xs text-white/45">
+                      Si necesitas ayuda con esta reserva, escríbenos por WhatsApp.
+                    </div>
                   </div>
-                );
-              })
-            )}
-          </div>
-
-          {hiddenIds.size > 0 ? (
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-white/60">
-              <span>Ocultas: {hiddenIds.size}</span>
-              <button
-                type="button"
-                onClick={() => persistHidden(new Set())}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 hover:bg-white/10"
-              >
-                Mostrar todo otra vez
-              </button>
-            </div>
-          ) : null}
+                </Card>
+              );
+            })
+          )}
         </div>
-      </main>
+
+        {hiddenIds.size > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">
+            <span className="rounded-full border border-white/10 bg-black/35 px-3 py-1">
+              Ocultas: <b className="text-white/75">{hiddenIds.size}</b>
+            </span>
+            <Button
+              type="button"
+              onClick={() => persistHidden(new Set())}
+              className="border border-white/12 bg-white/[0.06] text-white/90 hover:bg-white/10 px-4 py-2"
+            >
+              Mostrar todo otra vez
+            </Button>
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }

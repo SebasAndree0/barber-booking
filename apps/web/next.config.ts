@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/v1/:path*",
-        destination: "http://127.0.0.1:8001/api/v1/:path*",
+        destination: "https://barber-booking-t9e6.onrender.com/api/v1",
       },
     ];
   },

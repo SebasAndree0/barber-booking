@@ -46,8 +46,14 @@ function formatTime(isoOrLocal: string) {
   return `${hh}:${mm}`;
 }
 
+/**
+ * ✅ Consistente con tu app:
+ * - Si existe NEXT_PUBLIC_API_URL lo usa
+ * - Si no, usa el rewrite /api/v1 (same-origin)
+ */
 function apiUrl(path: string) {
-  const base = process.env.NEXT_PUBLIC_API_URL || "";
+  const envBase = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+  const base = envBase ? envBase : "/api/v1";
   const cleanBase = base.replace(/\/+$/, "");
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   return `${cleanBase}${cleanPath}`;
@@ -150,6 +156,17 @@ function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
 
+/**
+ * ✅ Cache + dedupe en memoria (evita “vueltas” al volver al mismo día/barbero/servicio)
+ * Ajusta TTL a gusto (30–60s suele andar perfecto).
+ */
+const SLOTS_CACHE = new Map<string, { ts: number; data: Slot[] }>();
+const SLOTS_TTL_MS = 30_000;
+
+function slotsKey(barberId: string, serviceId: string, day: string) {
+  return `${barberId}__${serviceId}__${day}`;
+}
+
 export default function BookingForm({
   barbers,
   services,
@@ -249,37 +266,57 @@ export default function BookingForm({
     [timeByPerson]
   );
 
-  // load slots
+  /**
+   * ✅ load slots (optimizado):
+   * - cache/dedupe por barber+service+day
+   * - AbortController para cancelar requests viejos
+   * - sin cache:"no-store" (porque ya dedupeamos + cache TTL)
+   */
   useEffect(() => {
+    const barberId = selectedBarberId;
+
+    if (!barberId || !day || !serviceId) {
+      setSlots([]);
+      return;
+    }
+
+    const key = slotsKey(barberId, serviceId, day);
+
+    // 1) cache en memoria (respuesta inmediata)
+    const cached = SLOTS_CACHE.get(key);
+    if (cached && Date.now() - cached.ts < SLOTS_TTL_MS) {
+      setSlots(cached.data);
+      return;
+    }
+
+    const controller = new AbortController();
     let alive = true;
 
     async function run() {
-      if (!selectedBarberId || !day || !serviceId) {
-        if (alive) setSlots([]);
-        return;
-      }
-
       setLoadingSlots(true);
       setSlotsError(null);
 
       try {
         const url = apiUrl(
           `/slots?barber_id=${encodeURIComponent(
-            selectedBarberId
+            barberId
           )}&service_id=${encodeURIComponent(
             serviceId
           )}&day=${encodeURIComponent(day)}&include_unavailable=true`
         );
 
-        const r = await fetch(url, { cache: "no-store" });
+        const r = await fetch(url, { signal: controller.signal });
         const j = await r.json().catch(() => null);
         if (!r.ok) throw new Error(j?.detail || `Error ${r.status}`);
 
         const list = Array.isArray(j) ? (j as Slot[]) : [];
         if (!alive) return;
+
+        SLOTS_CACHE.set(key, { ts: Date.now(), data: list });
         setSlots(list);
       } catch (e: any) {
         if (!alive) return;
+        if (e?.name === "AbortError") return; // request cancelado por cambio rápido
         setSlots([]);
         setSlotsError(e?.message || "No se pudieron cargar los horarios.");
       } finally {
@@ -289,8 +326,10 @@ export default function BookingForm({
     }
 
     run();
+
     return () => {
       alive = false;
+      controller.abort();
     };
   }, [selectedBarberId, serviceId, day, slotsRefreshKey]);
 
@@ -336,7 +375,9 @@ export default function BookingForm({
 
     if (rebook) {
       if (!hasFullName(owner)) {
-        setError("Para seleccionar hora, ingresa Nombre y Apellido del titular.");
+        setError(
+          "Para seleccionar hora, ingresa Nombre y Apellido del titular."
+        );
         return;
       }
       setTimeByPerson({ owner: startIso });
@@ -352,7 +393,6 @@ export default function BookingForm({
     }
 
     if (!hasFullName(next)) {
-      // ✅ ya no debería pasar porque bloqueamos, pero queda de respaldo
       setError(
         `Para seleccionar hora, completa Nombre y Apellido de: ${
           next.id === "owner" ? "Titular" : "Acompañante"
@@ -441,7 +481,9 @@ export default function BookingForm({
 
     for (const c of companions) {
       if (!hasFullName(c))
-        return setError("Completa Nombre y Apellido de todos los acompañantes.");
+        return setError(
+          "Completa Nombre y Apellido de todos los acompañantes."
+        );
     }
 
     const requiredCount = rebook ? 1 : people.length;
@@ -475,9 +517,9 @@ export default function BookingForm({
           apiUrl(
             `/bookings/${encodeURIComponent(
               rebookBookingId
-            )}?name=${encodeURIComponent(
-              name
-            )}&new_start_time=${encodeURIComponent(only)}`
+            )}?name=${encodeURIComponent(name)}&new_start_time=${encodeURIComponent(
+              only
+            )}`
           ),
           { method: "PATCH" }
         );
@@ -536,9 +578,7 @@ export default function BookingForm({
       setCompanions([]);
     } catch (e: any) {
       setError(
-        typeof e?.message === "string"
-          ? e.message
-          : "No se pudo crear la reserva."
+        typeof e?.message === "string" ? e.message : "No se pudo crear la reserva."
       );
     } finally {
       setLoadingCreate(false);
@@ -568,10 +608,7 @@ export default function BookingForm({
     const label = isOwner ? "Titular" : "Acompañante";
 
     return (
-      <div
-        key={p.id}
-        className="rounded-2xl border border-white/10 bg-black/30 p-4"
-      >
+      <div key={p.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-white">{label}</div>
@@ -583,13 +620,10 @@ export default function BookingForm({
                   value={p.firstName}
                   onChange={(e) => {
                     const v = e.target.value;
-                    if (isOwner)
-                      setOwner((prev) => ({ ...prev, firstName: v }));
+                    if (isOwner) setOwner((prev) => ({ ...prev, firstName: v }));
                     else
                       setCompanions((prev) =>
-                        prev.map((x) =>
-                          x.id === p.id ? { ...x, firstName: v } : x
-                        )
+                        prev.map((x) => (x.id === p.id ? { ...x, firstName: v } : x))
                       );
                   }}
                   placeholder="Ej: Waldo"
@@ -603,13 +637,10 @@ export default function BookingForm({
                   value={p.lastName}
                   onChange={(e) => {
                     const v = e.target.value;
-                    if (isOwner)
-                      setOwner((prev) => ({ ...prev, lastName: v }));
+                    if (isOwner) setOwner((prev) => ({ ...prev, lastName: v }));
                     else
                       setCompanions((prev) =>
-                        prev.map((x) =>
-                          x.id === p.id ? { ...x, lastName: v } : x
-                        )
+                        prev.map((x) => (x.id === p.id ? { ...x, lastName: v } : x))
                       );
                   }}
                   placeholder="Ej: Ramírez"
@@ -662,13 +693,9 @@ export default function BookingForm({
 
   return (
     <section className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-      <h2 className="text-xl font-semibold">
-        {rebook ? "Reagendar hora" : "Reservar hora"}
-      </h2>
+      <h2 className="text-xl font-semibold">{rebook ? "Reagendar hora" : "Reservar hora"}</h2>
       <p className="mt-1 text-sm text-white/60">
-        {rebook
-          ? "Completa tus datos y elige una nueva hora."
-          : "Titular + acompañantes. Asigna una hora a cada persona."}
+        {rebook ? "Completa tus datos y elige una nueva hora." : "Titular + acompañantes. Asigna una hora a cada persona."}
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
@@ -733,11 +760,7 @@ export default function BookingForm({
               <div className="text-sm font-semibold text-white">Día y horarios</div>
               <div className="text-xs text-white/60">
                 {day ? day : "Elige un día para ver horas"}{" "}
-                {loadingSlots
-                  ? "• cargando…"
-                  : slots.length
-                  ? `• ${availableCount} disponibles`
-                  : ""}
+                {loadingSlots ? "• cargando…" : slots.length ? `• ${availableCount} disponibles` : ""}
               </div>
               {!rebook ? (
                 <div className="mt-1 text-xs text-white/50">
@@ -758,7 +781,6 @@ export default function BookingForm({
 
           {calendarOpen ? (
             <div className="mt-4 rounded-3xl border border-white/10 bg-zinc-950/60 backdrop-blur p-4">
-              {/* ✅ ANCHO + CENTRADO */}
               <div className="mx-auto w-full max-w-3xl">
                 <div className="flex justify-center">
                   <DayPicker
@@ -771,11 +793,7 @@ export default function BookingForm({
                       onDayChange(ymd);
                       setCalendarOpen(false);
                     }}
-                    disabled={
-                      !rebook
-                        ? (d) => chileYMDFromDate(d) < todayChileYMD
-                        : undefined
-                    }
+                    disabled={!rebook ? (d) => chileYMDFromDate(d) < todayChileYMD : undefined}
                     weekStartsOn={1}
                     showOutsideDays
                     className="w-full"
@@ -783,8 +801,7 @@ export default function BookingForm({
                       [UI.Months]: "w-full flex flex-col items-center",
                       [UI.Month]: "w-full space-y-3",
 
-                      [UI.MonthCaption]:
-                        "w-full flex items-center justify-between px-1",
+                      [UI.MonthCaption]: "w-full flex items-center justify-between px-1",
                       [UI.CaptionLabel]: "text-sm font-extrabold text-white/90",
 
                       [UI.Nav]: "flex items-center gap-2",
@@ -797,27 +814,22 @@ export default function BookingForm({
                         "text-white/80 hover:bg-white/10 transition inline-flex items-center justify-center"
                       ),
 
-                      [UI.MonthGrid]:
-                        "mx-auto w-full max-w-[560px] border-collapse",
+                      [UI.MonthGrid]: "mx-auto w-full max-w-[560px] border-collapse",
                       [UI.Weekdays]: "flex justify-center",
-                      [UI.Weekday]:
-                        "w-12 text-center text-[11px] font-semibold text-white/50",
+                      [UI.Weekday]: "w-12 text-center text-[11px] font-semibold text-white/50",
                       [UI.Weeks]: "mt-1",
                       [UI.Week]: "mt-1 flex justify-center",
 
-                      [UI.Day]:
-                        "w-12 h-12 text-center p-0 group rounded-2xl text-white/85",
+                      [UI.Day]: "w-12 h-12 text-center p-0 group rounded-2xl text-white/85",
                       [UI.DayButton]: cx(
                         "h-12 w-12 rounded-2xl text-sm font-semibold text-inherit",
                         "transition focus:outline-none",
                         "group-hover:bg-white/10"
                       ),
 
-                      [DayFlag.today]:
-                        "border border-amber-300/35 bg-amber-300/10 text-amber-200",
+                      [DayFlag.today]: "border border-amber-300/35 bg-amber-300/10 text-amber-200",
                       [DayFlag.outside]: "text-white/25",
-                      [DayFlag.disabled]:
-                        "text-white/25 line-through opacity-70",
+                      [DayFlag.disabled]: "text-white/25 line-through opacity-70",
 
                       [SelectionState.selected]: "bg-amber-300 text-black",
                     }}
@@ -848,11 +860,9 @@ export default function BookingForm({
             </div>
           ) : null}
 
-          {/* ✅ mensaje guía */}
           {needName ? (
             <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">
-              Primero completa <b>Nombre y Apellido</b> de: <b>{needLabel}</b>, y
-              después eliges la hora.
+              Primero completa <b>Nombre y Apellido</b> de: <b>{needLabel}</b>, y después eliges la hora.
             </div>
           ) : null}
 
@@ -871,18 +881,13 @@ export default function BookingForm({
                   {slots.map((s) => {
                     const start = s.start_time;
 
-                    const isCurrent =
-                      !!rebook && sameInstant(start, currentStartTime);
-
+                    const isCurrent = !!rebook && sameInstant(start, currentStartTime);
                     const assignedToSomeone = !!ownerOfTime(start);
 
-                    const disabledByAvailability =
-                      (!s.available || isPastSlot(start)) && !isCurrent;
-
+                    const disabledByAvailability = (!s.available || isPastSlot(start)) && !isCurrent;
                     const disabledByName = needName && !assignedToSomeone;
 
-                    const disabled =
-                      (disabledByAvailability || disabledByName) && !isCurrent;
+                    const disabled = (disabledByAvailability || disabledByName) && !isCurrent;
 
                     return (
                       <button
@@ -922,9 +927,7 @@ export default function BookingForm({
                             : start
                         }
                       >
-                        {isCurrent
-                          ? `${formatTime(start)} • TU HORA`
-                          : formatTime(start)}
+                        {isCurrent ? `${formatTime(start)} • TU HORA` : formatTime(start)}
                       </button>
                     );
                   })}
@@ -955,11 +958,7 @@ export default function BookingForm({
           disabled={loadingCreate}
           className="mt-2 h-12 rounded-2xl bg-white text-black font-semibold transition hover:bg-white/90 disabled:opacity-60"
         >
-          {loadingCreate
-            ? "Guardando…"
-            : rebook
-            ? "Confirmar cambio"
-            : `Reservar (${people.length})`}
+          {loadingCreate ? "Guardando…" : rebook ? "Confirmar cambio" : `Reservar (${people.length})`}
         </button>
 
         <div className="text-xs text-white/50">

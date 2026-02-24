@@ -5,8 +5,8 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
-      { protocol: "https", hostname: "i.ytimg.com" }, // miniaturas YouTube
-      { protocol: "https", hostname: "img.youtube.com" }, // por si usas este dominio también
+      { protocol: "https", hostname: "i.ytimg.com" },
+      { protocol: "https", hostname: "img.youtube.com" },
     ],
   },
 
@@ -20,21 +20,28 @@ const nextConfig: NextConfig = {
   },
 
   async headers() {
+    // ✅ RECOMENDADO: en DEV no pongas CSP estricta (evita “se queda pegada” por bloqueos)
+    if (process.env.NODE_ENV !== "production") {
+      return [];
+    }
+
     return [
       {
         source: "/(.*)",
         headers: [
-          // ✅ CSP (permite inline + permite Google Maps iframe)
           {
             key: "Content-Security-Policy",
             value:
               "default-src 'self'; " +
-              "script-src 'self' 'unsafe-inline'; " +
+              // Si en algún momento usas Google Maps JS API, necesitarás permitir https://maps.googleapis.com aquí también.
+              "script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://*.googleapis.com; " +
               "style-src 'self' 'unsafe-inline'; " +
               "img-src 'self' data: https:; " +
-              "connect-src 'self' https:; " +
+              // ✅ IMPORTANTE: connect-src (API + Google)
+              "connect-src 'self' https: http://127.0.0.1:8001 http://localhost:8001 https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com; " +
               "font-src 'self' data: https:; " +
-              "frame-src 'self' https://www.google.com https://www.google.com.br; " + // ✅ Maps embed
+              // ✅ Maps embed (iframe)
+              "frame-src 'self' https://www.google.com https://www.google.com.br; " +
               "object-src 'none'; " +
               "base-uri 'self'; " +
               "frame-ancestors 'none'; " +
@@ -52,14 +59,16 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
 
           // ✅ Permisos del navegador
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
 
-          // ✅ Cross-Origin hardening (seguro para la mayoría de webs)
+          // ✅ Cross-Origin hardening
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
 
           // ⚠️ COEP puede romper Google Maps embed y otros recursos externos.
-          // Si lo activas y se rompe algo, vuelve a comentarlo.
           // { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
         ],
       },

@@ -1,6 +1,7 @@
+// C:\osobarber\barber-booking\apps\web\app\booking\BookingClient.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import BookingForm from "../components/BookingForm";
@@ -30,16 +31,6 @@ function isValidDay(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test((s || "").trim());
 }
 
-async function fetchWithTimeout(url: string, ms = 8000) {
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), ms);
-  try {
-    return await fetch(url, { cache: "no-store", signal: controller.signal });
-  } finally {
-    clearTimeout(t);
-  }
-}
-
 function cleanName(s: string) {
   return (s || "").trim().replace(/\s+/g, " ");
 }
@@ -47,6 +38,45 @@ function cleanName(s: string) {
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
+
+/**
+ * ✅ IMPORTANTE:
+ * - Para evitar problemas de CSP / CORS y “Google API / blocked”, lo más estable es pegarle a /api/v1 (rewrites)
+ * - Si existe NEXT_PUBLIC_API_URL, lo usa; si no, cae a /api/v1
+ */
+function apiBase() {
+  const envBase = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+  const base = envBase ? envBase : "/api/v1";
+  return base.replace(/\/+$/, "");
+}
+function apiUrl(path: string) {
+  const b = apiBase();
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${b}${p}`;
+}
+
+async function fetchWithTimeout(url: string, ms = 8000) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), ms);
+  try {
+    // ✅ no-store en booking puede sentirse “lento” porque refetchea siempre.
+    // Para barbers/services vamos a cachear en memoria abajo (TTL).
+    return await fetch(url, { cache: "no-store", signal: controller.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* ---------------- In-memory cache (evita refetch repetido / StrictMode dev) ---------------- */
+
+type BootstrapCache = {
+  ts: number;
+  barbers: Barber[];
+  services: Service[];
+};
+
+const BOOTSTRAP_TTL_MS = 60_000; // 60s (suficiente para navegación; ajusta si quieres)
+let bootstrapCache: BootstrapCache | null = null;
 
 /* ---------------- Icons ---------------- */
 
@@ -132,10 +162,7 @@ function Button({
   return (
     <button
       {...props}
-      className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition",
-        className
-      )}
+      className={cx("inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition", className)}
     >
       {children}
     </button>
@@ -155,10 +182,6 @@ export default function BookingClient() {
   // ✅ evita hydration mismatch: solo render “real” cuando está montado
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-
-  // ✅ fallback a rewrite local si no tienes env
-  const baseRaw = (process.env.NEXT_PUBLIC_API_URL || "").trim();
-  const base = useMemo(() => (baseRaw ? baseRaw.replace(/\/+$/, "") : "/api/v1"), [baseRaw]);
 
   // Query params
   const qpServiceId = searchParams.get("service_id") || "";
@@ -185,32 +208,60 @@ export default function BookingClient() {
   const [err, setErr] = useState<string | null>(null);
 
   const [selectedBarberId, setSelectedBarberId] = useState<string>("");
-  // ✅ importante: NO calculamos “hoy” en render inicial
   const [day, setDay] = useState<string>(isValidDay(qpDay) ? qpDay : "");
 
   const [successOpen, setSuccessOpen] = useState(false);
   const [successKind, setSuccessKind] = useState<"created" | "rescheduled">("created");
 
+  // ✅ evita doble fetch DEV (React StrictMode monta/desmonta y corre effects 2 veces)
+  const didBootstrapRef = useRef(false);
+
   // set day desde query o hoy (solo cliente)
   useEffect(() => {
+    if (!mounted) return;
     const next = isValidDay(qpDay) ? qpDay : "";
     setDay(next || todayYYYYMMDDChile());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qpDay, mounted]);
 
-  // load data
+  // load bootstrap (barbers + services)
   useEffect(() => {
     if (!mounted) return;
 
+    // ✅ en DEV, StrictMode puede disparar doble; esto lo corta
+    if (process.env.NODE_ENV !== "production" && didBootstrapRef.current) {
+      // igual dejamos que actualice barber seleccionado si cambia query param
+      if (qpBarberId && barbers.some((x) => x.id === qpBarberId)) setSelectedBarberId(qpBarberId);
+      return;
+    }
+    didBootstrapRef.current = true;
+
     let alive = true;
+
     async function load() {
-      setLoading(true);
       setErr(null);
+
+      // ✅ 1) sirve cache en memoria para evitar “carga por partes” repetida
+      const now = Date.now();
+      const cachedOk = bootstrapCache && now - bootstrapCache.ts < BOOTSTRAP_TTL_MS;
+
+      if (cachedOk) {
+        setBarbers(bootstrapCache!.barbers);
+        setServices(bootstrapCache!.services);
+
+        const b = bootstrapCache!.barbers;
+        if (qpBarberId && b.some((x) => x.id === qpBarberId)) setSelectedBarberId(qpBarberId);
+        else setSelectedBarberId((prev) => prev || b[0]?.id || "");
+
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
 
       try {
         const [bRes, sRes] = await Promise.all([
-          fetchWithTimeout(`${base}/barbers`, 8000),
-          fetchWithTimeout(`${base}/services`, 8000),
+          fetchWithTimeout(apiUrl("/barbers"), 8000),
+          fetchWithTimeout(apiUrl("/services"), 8000),
         ]);
 
         const bJson = await bRes.json().catch(() => null);
@@ -224,6 +275,9 @@ export default function BookingClient() {
 
         if (!alive) return;
 
+        // guarda cache
+        bootstrapCache = { ts: Date.now(), barbers: b, services: s };
+
         setBarbers(b);
         setServices(s);
 
@@ -231,8 +285,7 @@ export default function BookingClient() {
         else setSelectedBarberId((prev) => prev || b[0]?.id || "");
       } catch (e: any) {
         if (!alive) return;
-        const msg =
-          e?.name === "AbortError" ? `Timeout: el API no respondió.` : e?.message || "Error cargando datos";
+        const msg = e?.name === "AbortError" ? "Timeout: el API no respondió." : e?.message || "Error cargando datos";
         setErr(msg);
       } finally {
         if (!alive) return;
@@ -244,7 +297,9 @@ export default function BookingClient() {
     return () => {
       alive = false;
     };
-  }, [base, qpBarberId, mounted]);
+    // ⚠️ no metemos "barbers" en deps; si no, se vuelve a disparar
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, qpBarberId]);
 
   const headerTitle = useMemo(() => (rebook ? "Reagendar tu hora" : "Reserva tu hora"), [rebook]);
 
@@ -260,7 +315,7 @@ export default function BookingClient() {
     return b?.name || null;
   }, [selectedBarberId, barbers]);
 
-  // ✅ skeleton estable SSR/CSR (evita hydration mismatch)
+  // ✅ skeleton estable SSR/CSR
   if (!mounted) {
     return (
       <div className="grid gap-6 py-10">
@@ -318,13 +373,11 @@ export default function BookingClient() {
               </div>
 
               <h1 className="mt-4 text-3xl md:text-5xl font-semibold tracking-tight leading-[1.02]">
-                {headerTitle}.{" "}
-                <span className="text-amber-200/95">{rebook ? "Actualiza en segundos." : "Sin filas."}</span>
+                {headerTitle}. <span className="text-amber-200/95">{rebook ? "Actualiza en segundos." : "Sin filas."}</span>
               </h1>
 
               <p className="mt-3 text-sm md:text-base text-white/65 max-w-2xl leading-relaxed">
-                Elige barbero, servicio, día y horario disponible.{" "}
-                <b className="text-white/85">Rápido, limpio y sin vueltas.</b>
+                Elige barbero, servicio, día y horario disponible. <b className="text-white/85">Rápido, limpio y sin vueltas.</b>
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
@@ -492,9 +545,7 @@ export default function BookingClient() {
                 <div>
                   <div className="text-lg font-semibold text-white">Listo</div>
                   <div className="mt-1 text-sm text-white/70">
-                    {successKind === "rescheduled"
-                      ? "Tu reserva fue actualizada. ✅"
-                      : "Reserva creada. ¡Nos vemos en OsoBarber!"}
+                    {successKind === "rescheduled" ? "Tu reserva fue actualizada. ✅" : "Reserva creada. ¡Nos vemos en OsoBarber!"}
                   </div>
                 </div>
               </div>

@@ -18,6 +18,50 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          // ✅ CSP (rápido, permite inline)
+          {
+            key: "Content-Security-Policy",
+            value:
+              "default-src 'self'; " +
+              "script-src 'self' 'unsafe-inline'; " +
+              "style-src 'self' 'unsafe-inline'; " +
+              "img-src 'self' data: https:; " +
+              "connect-src 'self' https:; " +
+              "font-src 'self' data: https:; " +
+              "object-src 'none'; " +
+              "base-uri 'self'; " +
+              "frame-ancestors 'none';",
+          },
+
+          // ✅ Anti-clickjacking
+          { key: "X-Frame-Options", value: "DENY" },
+
+          // ✅ Evita MIME sniffing
+          { key: "X-Content-Type-Options", value: "nosniff" },
+
+          // ✅ Referrer policy
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+
+          // ✅ Permisos del navegador
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+
+          // ✅ Cross-Origin hardening
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+
+          // ⚠️ COEP puede romper recursos externos si no tienen CORS correcto.
+          // Actívalo después si todo funciona y quieres puntaje más alto:
+          // { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

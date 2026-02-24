@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: [
-          // ✅ CSP (rápido, permite inline)
+          // ✅ CSP (permite inline + permite Google Maps iframe)
           {
             key: "Content-Security-Policy",
             value:
@@ -34,9 +34,12 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: https:; " +
               "connect-src 'self' https:; " +
               "font-src 'self' data: https:; " +
+              "frame-src 'self' https://www.google.com https://www.google.com.br; " + // ✅ Maps embed
               "object-src 'none'; " +
               "base-uri 'self'; " +
-              "frame-ancestors 'none';",
+              "frame-ancestors 'none'; " +
+              "form-action 'self'; " +
+              "upgrade-insecure-requests;",
           },
 
           // ✅ Anti-clickjacking
@@ -51,12 +54,12 @@ const nextConfig: NextConfig = {
           // ✅ Permisos del navegador
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 
-          // ✅ Cross-Origin hardening
+          // ✅ Cross-Origin hardening (seguro para la mayoría de webs)
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
 
-          // ⚠️ COEP puede romper recursos externos si no tienen CORS correcto.
-          // Actívalo después si todo funciona y quieres puntaje más alto:
+          // ⚠️ COEP puede romper Google Maps embed y otros recursos externos.
+          // Si lo activas y se rompe algo, vuelve a comentarlo.
           // { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
         ],
       },

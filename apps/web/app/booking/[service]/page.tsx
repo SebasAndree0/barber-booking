@@ -28,10 +28,14 @@ function norm(s: string) {
  * Ajusta aquí si tus nombres exactos en /services son distintos.
  */
 const SLUG_TO_NAMES: Record<string, string[]> = {
-  "corte": ["corte"],
+  corte: ["corte"],
   "corte-ceja": ["corte + ceja", "corte ceja"],
   "corte-barba": ["corte + barba", "corte barba"],
-  "corte-ceja-barba": ["corte + ceja + barba", "corte ceja barba", "corte + barba + ceja"],
+  "corte-ceja-barba": [
+    "corte + ceja + barba",
+    "corte ceja barba",
+    "corte + barba + ceja",
+  ],
 };
 
 export default async function BookingServicePage({
@@ -42,7 +46,7 @@ export default async function BookingServicePage({
   const slug = norm(params.service);
   const wanted = SLUG_TO_NAMES[slug];
 
-  // slug no reconocido
+  // slug no reconocido -> 404
   if (!wanted) {
     notFound();
   }
@@ -61,9 +65,9 @@ export default async function BookingServicePage({
   const match =
     services.find((s) => wanted.some((w) => norm(s.name) === norm(w))) || null;
 
-  // si el backend no lo tiene, 404
+  // si el backend no lo tiene, NO 404: manda a booking sin selección (evita “falla”)
   if (!match) {
-    notFound();
+    redirect("/booking");
   }
 
   // ✅ redirección final: aquí sí funciona el autoselect del BookingForm

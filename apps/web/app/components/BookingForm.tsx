@@ -226,9 +226,15 @@ export default function BookingForm({
   const todayChileYMD = useMemo(() => chileYMDFromDate(new Date()), []);
   const selectedDate = useMemo(() => parseYMDToSafeDate(day), [day]);
 
-  // service default
+  /**
+   * ✅ FIX IMPORTANTE:
+   * - Prioridad 1: si viene preselectedServiceId y existe en services -> lo setea SIEMPRE
+   * - Prioridad 2: si no viene preselección válida -> respeta lo elegido; si está vacío, usa el primero
+   *
+   * Esto arregla tu caso: Home manda /booking?service_id=XXX y BookingForm debe “enganchar” ese servicio
+   * aunque se haya seteado uno por defecto antes.
+   */
   useEffect(() => {
-    if (serviceId) return;
     if (services.length === 0) return;
 
     if (
@@ -239,8 +245,8 @@ export default function BookingForm({
       return;
     }
 
-    setServiceId(services[0]!.id);
-  }, [services, serviceId, preselectedServiceId]);
+    setServiceId((prev) => prev || services[0]!.id);
+  }, [services, preselectedServiceId]);
 
   // reset selection when filters change
   useEffect(() => {
@@ -270,7 +276,6 @@ export default function BookingForm({
    * ✅ load slots (optimizado):
    * - cache/dedupe por barber+service+day
    * - AbortController para cancelar requests viejos
-   * - sin cache:"no-store" (porque ya dedupeamos + cache TTL)
    */
   useEffect(() => {
     const barberId = selectedBarberId;
@@ -316,7 +321,7 @@ export default function BookingForm({
         setSlots(list);
       } catch (e: any) {
         if (!alive) return;
-        if (e?.name === "AbortError") return; // request cancelado por cambio rápido
+        if (e?.name === "AbortError") return;
         setSlots([]);
         setSlotsError(e?.message || "No se pudieron cargar los horarios.");
       } finally {
@@ -375,9 +380,7 @@ export default function BookingForm({
 
     if (rebook) {
       if (!hasFullName(owner)) {
-        setError(
-          "Para seleccionar hora, ingresa Nombre y Apellido del titular."
-        );
+        setError("Para seleccionar hora, ingresa Nombre y Apellido del titular.");
         return;
       }
       setTimeByPerson({ owner: startIso });
@@ -481,17 +484,13 @@ export default function BookingForm({
 
     for (const c of companions) {
       if (!hasFullName(c))
-        return setError(
-          "Completa Nombre y Apellido de todos los acompañantes."
-        );
+        return setError("Completa Nombre y Apellido de todos los acompañantes.");
     }
 
     const requiredCount = rebook ? 1 : people.length;
     if (Object.keys(timeByPerson).length < requiredCount) {
       if (rebook) return setError("Selecciona 1 hora.");
-      return setError(
-        "Debes asignar una hora a cada persona (Titular y acompañantes)."
-      );
+      return setError("Debes asignar una hora a cada persona (Titular y acompañantes).");
     }
 
     for (const pid of Object.keys(timeByPerson)) {
@@ -517,9 +516,7 @@ export default function BookingForm({
           apiUrl(
             `/bookings/${encodeURIComponent(
               rebookBookingId
-            )}?name=${encodeURIComponent(name)}&new_start_time=${encodeURIComponent(
-              only
-            )}`
+            )}?name=${encodeURIComponent(name)}&new_start_time=${encodeURIComponent(only)}`
           ),
           { method: "PATCH" }
         );
@@ -577,9 +574,7 @@ export default function BookingForm({
       setOwner({ id: "owner", firstName: "", lastName: "" });
       setCompanions([]);
     } catch (e: any) {
-      setError(
-        typeof e?.message === "string" ? e.message : "No se pudo crear la reserva."
-      );
+      setError(typeof e?.message === "string" ? e.message : "No se pudo crear la reserva.");
     } finally {
       setLoadingCreate(false);
     }

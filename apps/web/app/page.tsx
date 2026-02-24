@@ -67,15 +67,6 @@ function IconWhatsApp(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-function IconPlay(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" {...props}>
-      <path d="M10 8.5v7l6-3.5-6-3.5Z" fill="currentColor" />
-      <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  );
-}
-
 function IconArrow(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" {...props}>
@@ -167,9 +158,7 @@ function SectionHead({ title, subtitle }: { title: string; subtitle?: string }) 
 
         <h2 className="mt-2 text-2xl md:text-4xl font-semibold tracking-tight">{title}</h2>
 
-        {subtitle ? (
-          <p className="mt-3 text-sm md:text-base text-white/65 max-w-2xl leading-relaxed">{subtitle}</p>
-        ) : null}
+        {subtitle ? <p className="mt-3 text-sm md:text-base text-white/65 max-w-2xl leading-relaxed">{subtitle}</p> : null}
       </div>
     </div>
   );
@@ -191,20 +180,18 @@ export default function Home() {
   const waLink =
     "https://wa.me/" + BUSINESS.waNumber + "?text=" + encodeURIComponent("Hola! Quiero agendar una hora en OsoBarber 🙌");
 
-  // ✅ UUID reales desde tu API
-  const SERVICE = {
-    corte: "11111111-1111-1111-1111-111111111111",
-    corteCeja: "11111111-1111-1111-1111-111111111112",
-    corteBarba: "11111111-1111-1111-1111-111111111113",
-    corteCejaBarba: "11111111-1111-1111-1111-111111111114",
-  };
-
+  /**
+   * ✅ AQUÍ ESTÁ EL CAMBIO IMPORTANTE:
+   * Ya NO usamos /booking?service_id=UUID
+   * Usamos slugs bonitos que luego redirigen a /booking?service_id=<ID REAL>
+   * (vía apps/web/app/booking/[service]/page.tsx en modo server)
+   */
   const SERVICES_AND_PRICES: PriceItem[] = [
     {
       title: "Corte",
       desc: "Corte moderno o clásico, terminación limpia y rápida.",
       promo: 7000,
-      href: `/booking?service_id=${SERVICE.corte}`,
+      href: "/booking/corte",
       icon: <IconScissors className="h-5 w-5" />,
     },
     {
@@ -213,7 +200,7 @@ export default function Home() {
       promo: 7000,
       normal: 8000,
       badge: "Promo",
-      href: `/booking?service_id=${SERVICE.corteCeja}`,
+      href: "/booking/corte-ceja",
       icon: <IconBrow className="h-5 w-5" />,
     },
     {
@@ -222,7 +209,7 @@ export default function Home() {
       promo: 8000,
       normal: 9000,
       badge: "Promo",
-      href: `/booking?service_id=${SERVICE.corteBarba}`,
+      href: "/booking/corte-barba",
       icon: <IconBeard className="h-5 w-5" />,
     },
     {
@@ -231,7 +218,7 @@ export default function Home() {
       promo: 8000,
       normal: 10000,
       badge: "Promo",
-      href: `/booking?service_id=${SERVICE.corteCejaBarba}`,
+      href: "/booking/corte-ceja-barba",
       icon: (
         <div className="flex items-center gap-1">
           <IconScissors className="h-5 w-5" />
@@ -241,21 +228,10 @@ export default function Home() {
     },
   ];
 
-  /**
-   * ✅ HERO (se mantiene tal cual, pero con fondo negro)
-   */
   const HERO = useMemo(
     () => [
-      {
-        src: "/osobarberr1.png",
-        headline: "Cortes con gran detalle",
-        sub: "Cortes limpios, estilo y precisión. Agenda y llegas directo.",
-      },
-      {
-        src: "/osobarberr2.png",
-        headline: "Reserva online.",
-        sub: "Sin filas. Sin esperar. Tú eliges el horario disponible.",
-      },
+      { src: "/osobarberr1.png", headline: "Cortes con gran detalle", sub: "Cortes limpios, estilo y precisión. Agenda y llegas directo." },
+      { src: "/osobarberr2.png", headline: "Reserva online.", sub: "Sin filas. Sin esperar. Tú eliges el horario disponible." },
     ],
     []
   );
@@ -268,7 +244,6 @@ export default function Home() {
     return () => window.clearInterval(id);
   }, [HERO.length]);
 
-  // ✅ GALERÍA (TUS FOTOS LOCALES EN /public)
   const GALLERY = useMemo(
     () => [
       { src: "/file_000000000acc720e864b358b61cd2f69.png", alt: "Barbería" },
@@ -282,13 +257,7 @@ export default function Home() {
   );
 
   const REVIEWS: Review[] = [
-    {
-      name: "Reggaeton Latino",
-      role: "Cliente",
-      text: "Excelente atención, buenos cortes..",
-      rating: 5,
-      avatar: "/jalvarez.jpeg",
-    },
+    { name: "Reggaeton Latino", role: "Cliente", text: "Excelente atención, buenos cortes..", rating: 5, avatar: "/jalvarez.jpeg" },
     {
       name: "Sebastián B",
       role: "Cliente",
@@ -320,14 +289,9 @@ export default function Home() {
       {/* HERO PRO (FONDO NEGRO) */}
       <section className="relative overflow-hidden rounded-[2.8rem] border border-white/10 bg-white/[0.04]">
         <div className="absolute inset-0">
-          {/* Fondo negro */}
           <div className="absolute inset-0 bg-black" />
-
-          {/* Brillos suaves */}
           <div className="absolute inset-0 [background:radial-gradient(70%_55%_at_22%_18%,rgba(245,197,24,0.18),transparent_60%)]" />
           <div className="absolute inset-0 [background:radial-gradient(55%_40%_at_85%_10%,rgba(255,255,255,0.07),transparent_55%)]" />
-
-          {/* Grano pro */}
           <div className="absolute inset-0 opacity-[0.18] mix-blend-overlay pointer-events-none bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22120%22 height=%22120%22 filter=%22url(%23n)%22 opacity=%220.35%22/%3E%3C/svg%3E')]" />
         </div>
 
@@ -437,7 +401,7 @@ export default function Home() {
                   <div className="mt-1 font-semibold text-white/90">{BUSINESS.phoneDisplay}</div>
 
                   <a
-                    href={waLink}
+                    href={"https://wa.me/" + BUSINESS.waNumber + "?text=" + encodeURIComponent("Hola! Quiero agendar una hora en OsoBarber 🙌")}
                     target="_blank"
                     rel="noreferrer"
                     className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-extrabold text-black hover:bg-white/90 transition"
@@ -495,7 +459,7 @@ export default function Home() {
                   href={s.href}
                   className="inline-flex w-full items-center justify-center rounded-2xl bg-[rgba(245,197,24,1)] px-5 py-3 font-extrabold text-black hover:brightness-95 transition"
                 >
-                  Agendar este servicio
+                  Agendar este servicio <IconArrow className="ml-2 h-5 w-5" />
                 </Link>
               </div>
             </Card>
@@ -600,13 +564,7 @@ export default function Home() {
 
               <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/40">
                 <div className="relative aspect-[16/9]">
-                  <Image
-                    src={GALLERY[lightbox].src}
-                    alt={GALLERY[lightbox].alt}
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 1000px"
-                    className="object-contain"
-                  />
+                  <Image src={GALLERY[lightbox].src} alt={GALLERY[lightbox].alt} fill sizes="(max-width: 1024px) 100vw, 1000px" className="object-contain" />
                 </div>
               </div>
 
@@ -637,14 +595,7 @@ export default function Home() {
 
         <div className="grid gap-4 lg:grid-cols-1">
           <Card className="overflow-hidden">
-            <iframe
-              title="Mapa OsoBarber"
-              src={BUSINESS.mapsEmbed}
-              width="100%"
-              height="420"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
+            <iframe title="Mapa OsoBarber" src={BUSINESS.mapsEmbed} width="100%" height="420" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
           </Card>
         </div>
       </section>

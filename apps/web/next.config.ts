@@ -1,4 +1,4 @@
-// C:\osobarber\barber-booking\apps\web\next.config.ts
+// apps/web/next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -14,7 +14,8 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/v1/:path*",
-        destination: "https://barber-booking-t9e6.onrender.com/api/v1",
+        // ✅ IMPORTANTE: mantener el path para /services, /barbers, /slots, etc.
+        destination: "https://barber-booking-t9e6.onrender.com/api/v1/:path*",
       },
     ];
   },

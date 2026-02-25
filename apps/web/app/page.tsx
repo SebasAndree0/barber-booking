@@ -191,7 +191,7 @@ export default function Home() {
       title: "Corte",
       desc: "Corte moderno o clásico, terminación limpia y rápida.",
       promo: 7000,
-      href: "/booking/corte",
+      href: "/booking?service_id=f4ecf3a6-4d16-4528-aeb9-87cd8f515fb8",
       icon: <IconScissors className="h-5 w-5" />,
     },
     {
@@ -200,7 +200,7 @@ export default function Home() {
       promo: 7000,
       normal: 8000,
       badge: "Promo",
-      href: "/booking/corte-ceja",
+      href: "/booking?service_id=c0813e87-7ee0-4c26-8eea-9891fd6ce980",
       icon: <IconBrow className="h-5 w-5" />,
     },
     {
@@ -209,7 +209,7 @@ export default function Home() {
       promo: 8000,
       normal: 9000,
       badge: "Promo",
-      href: "/booking/corte-barba",
+      href: "/booking?service_id=18771a21-3a5c-482a-a656-9ced0b890c3c",
       icon: <IconBeard className="h-5 w-5" />,
     },
     {
@@ -218,7 +218,7 @@ export default function Home() {
       promo: 8000,
       normal: 10000,
       badge: "Promo",
-      href: "/booking/corte-ceja-barba",
+      href: "/booking?service_id=1e1a0427-69a9-473f-86bd-ceb2cba40b4e",
       icon: (
         <div className="flex items-center gap-1">
           <IconScissors className="h-5 w-5" />

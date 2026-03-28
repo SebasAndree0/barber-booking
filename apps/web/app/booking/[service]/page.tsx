@@ -1,132 +1,75 @@
-"use client";
+// apps/web/app/booking/[service]/page.tsx
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
-import BookingForm from "../../components/BookingForm";
-import { SERVICE_BY_SLUG, type ServiceSlug } from "../../lib/services";
+import { redirect, notFound } from "next/navigation";
 
-type Barber = { id: string; name: string };
-type Service = { id: string; name: string; duration_minutes: number; price_clp?: number | null };
+type Service = {
+  id: string;
+  name: string;
+  duration_minutes: number;
+  price_clp?: number | null;
+};
 
-function todayYYYYMMDD() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+function apiUrl(path: string) {
+  // ✅ misma idea que el resto de tu app:
+  // si existe NEXT_PUBLIC_API_URL úsala; si no, /api/v1 (rewrites same-origin)
+  const envBase = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+  const base = envBase ? envBase : "/api/v1";
+  const cleanBase = base.replace(/\/+$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `${cleanBase}${cleanPath}`;
 }
 
-function BookingInner() {
-  const params = useParams();
-  const slugRaw = String(params?.service || "");
-  const slug = slugRaw as ServiceSlug;
+function norm(s: string) {
+  return (s || "").trim().toLowerCase();
+}
 
-  const base = process.env.NEXT_PUBLIC_API_URL || "";
+/**
+ * ✅ Slug -> nombres aceptados (para calzar aunque el backend tenga variantes)
+ * Ajusta aquí si tus nombres exactos en /services son distintos.
+ */
+const SLUG_TO_NAMES: Record<string, string[]> = {
+  corte: ["corte"],
+  "corte-ceja": ["corte + ceja", "corte ceja"],
+  "corte-barba": ["corte + barba", "corte barba"],
+  "corte-ceja-barba": [
+    "corte + ceja + barba",
+    "corte ceja barba",
+    "corte + barba + ceja",
+  ],
+};
 
-  const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
+export default async function BookingServicePage({
+  params,
+}: {
+  params: { service: string };
+}) {
+  const slug = norm(params.service);
+  const wanted = SLUG_TO_NAMES[slug];
 
-  const [selectedBarberId, setSelectedBarberId] = useState<string>("");
-  const [day, setDay] = useState<string>(todayYYYYMMDD());
-
-  const preselectedServiceId = useMemo(() => {
-    return (SERVICE_BY_SLUG as any)[slug]?.id || "";
-  }, [slug]);
-
-  useEffect(() => {
-    let alive = true;
-
-    async function load() {
-      setLoading(true);
-      setErr(null);
-
-      try {
-        if (!base) {
-          throw new Error("Falta NEXT_PUBLIC_API_URL en apps/web/.env.local (ej: http://127.0.0.1:8001/api/v1)");
-        }
-
-        const [bRes, sRes] = await Promise.all([
-          fetch(`${base}/barbers`, { cache: "no-store" }),
-          fetch(`${base}/services`, { cache: "no-store" }),
-        ]);
-
-        const bJson = await bRes.json().catch(() => null);
-        const sJson = await sRes.json().catch(() => null);
-
-        if (!bRes.ok) throw new Error(bJson?.detail || `Error ${bRes.status}`);
-        if (!sRes.ok) throw new Error(sJson?.detail || `Error ${sRes.status}`);
-
-        const b = Array.isArray(bJson) ? (bJson as Barber[]) : [];
-        const s = Array.isArray(sJson) ? (sJson as Service[]) : [];
-
-        if (!alive) return;
-
-        setBarbers(b);
-        setServices(s);
-
-        setSelectedBarberId((prev) => prev || b[0]?.id || "");
-      } catch (e: any) {
-        if (!alive) return;
-        setErr(e?.message || "Error cargando datos");
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    }
-
-    load();
-    return () => {
-      alive = false;
-    };
-  }, [base]);
-
-  // Si el slug no existe, avisa bonito
-  if (!preselectedServiceId) {
-    return (
-      <div className="rounded-3xl border border-rose-500/30 bg-rose-500/10 p-6 text-rose-200">
-        Servicio no válido: <b>{slugRaw}</b>
-      </div>
-    );
+  // slug no reconocido -> 404
+  if (!wanted) {
+    notFound();
   }
 
-  return (
-    <div className="grid gap-6">
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-        <h1 className="text-2xl font-semibold">Reserva tu hora</h1>
-        <p className="mt-1 text-sm text-white/70">Elige barbero, día y horario disponible.</p>
-        <p className="mt-2 text-xs text-white/50">
-          Horarios: Lun–Vie 19:00–22:00 • Sáb 10:00–22:00 • Dom 10:00–21:00
-        </p>
-      </div>
+  // trae servicios reales desde la API
+  const r = await fetch(apiUrl("/services"), { cache: "no-store" });
+  const j = await r.json().catch(() => null);
 
-      {err && (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{err}</div>
-      )}
+  if (!r.ok || !Array.isArray(j)) {
+    notFound();
+  }
 
-      {loading ? (
-        <div className="text-white/70">Cargando…</div>
-      ) : (
-        <BookingForm
-          barbers={barbers}
-          services={services as any}
-          selectedBarberId={selectedBarberId}
-          onSelectBarberId={setSelectedBarberId}
-          day={day}
-          onDayChange={setDay}
-          preselectedServiceId={preselectedServiceId}
-          onCreated={() => {}}
-        />
-      )}
-    </div>
-  );
-}
+  const services = j as Service[];
 
-export default function BookingServicePage() {
-  return (
-    <Suspense fallback={<div className="text-white/70">Cargando…</div>}>
-      <BookingInner />
-    </Suspense>
-  );
+  // encuentra el servicio por nombre (tolerante)
+  const match =
+    services.find((s) => wanted.some((w) => norm(s.name) === norm(w))) || null;
+
+  // si el backend no lo tiene, NO 404: manda a booking sin selección (evita “falla”)
+  if (!match) {
+    redirect("/booking");
+  }
+
+  // ✅ redirección final: aquí sí funciona el autoselect del BookingForm
+  redirect(`/booking?service_id=${encodeURIComponent(match.id)}`);
 }
